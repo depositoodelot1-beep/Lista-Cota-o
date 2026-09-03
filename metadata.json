@@ -1,0 +1,6 @@
+{
+  "name": "Lista de Compras",
+  "description": "Aplicativo para registro e controle de reposição de produtos em falta ou com baixo estoque para lojas e fornecedores.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
