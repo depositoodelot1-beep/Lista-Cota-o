@@ -1,7 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { X, Check, UserPlus, Plus, Minus, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import {
+  X,
+  Check,
+  UserPlus,
+  Plus,
+  Minus,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Package,
+  CheckCircle2,
+  Search,
+} from 'lucide-react';
 import { Product, AppUser } from '../types';
-import { capitalizeWords } from '../utils/text';
+import { capitalizeWords, normalizeSearchText } from '../utils/text';
 
 interface AddEditProductModalProps {
   isOpen: boolean;
@@ -11,6 +23,7 @@ interface AddEditProductModalProps {
   onClose: () => void;
   onSave: (data: Omit<Product, 'id'>, editId?: string) => Promise<void>;
   onOpenUserManager?: () => void;
+  allProducts?: Product[];
 }
 
 export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
@@ -21,6 +34,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
   onClose,
   onSave,
   onOpenUserManager,
+  allProducts = [],
 }) => {
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
@@ -33,6 +47,11 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Suggestions state
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [selectedDatabaseProduct, setSelectedDatabaseProduct] = useState<Product | null>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   // Sync state when editing product opens
   useEffect(() => {
     if (productToEdit) {
@@ -43,6 +62,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
       setResponsibleId(productToEdit.responsibleId || currentUser.id);
       setUrgency(productToEdit.urgency || 'media');
       setNotes(productToEdit.notes || '');
+      setSelectedDatabaseProduct(productToEdit);
       if (productToEdit.brand || productToEdit.notes) {
         setShowMoreDetails(true);
       }
@@ -55,9 +75,70 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
       setUrgency('media'); // 'Normal' selected by default like in screenshot
       setNotes('');
       setShowMoreDetails(false);
+      setSelectedDatabaseProduct(null);
     }
+    setIsDropdownOpen(false);
     setError(null);
   }, [productToEdit, currentUser, isOpen]);
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Filter products from database based on typed text
+  const matchingProducts = useMemo(() => {
+    if (!name.trim() || !allProducts || allProducts.length === 0) return [];
+    const term = normalizeSearchText(name);
+    if (term.length < 1) return [];
+
+    const matches = allProducts.filter((p) => {
+      // Don't suggest the exact same product currently being edited
+      if (productToEdit && p.id === productToEdit.id) return false;
+      const nameNorm = normalizeSearchText(p.name);
+      const brandNorm = normalizeSearchText(p.brand || '');
+      return nameNorm.includes(term) || brandNorm.includes(term);
+    });
+
+    // Sort: items that start with term first, then alphabetical
+    matches.sort((a, b) => {
+      const aStarts = normalizeSearchText(a.name).startsWith(term);
+      const bStarts = normalizeSearchText(b.name).startsWith(term);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      return a.name.localeCompare(b.name, 'pt-BR');
+    });
+
+    return matches.slice(0, 6);
+  }, [name, allProducts, productToEdit]);
+
+  // Handle selecting a product from the database suggestions
+  const handleSelectProduct = (prod: Product) => {
+    setName(prod.name);
+    if (prod.brand) setBrand(prod.brand);
+    if (prod.unit) setUnit(prod.unit);
+    if (prod.quantity !== undefined && Number(prod.quantity) > 0) {
+      setQuantity(prod.quantity);
+    } else {
+      setQuantity(1);
+    }
+    if (prod.urgency) setUrgency(prod.urgency);
+    if (prod.notes) setNotes(prod.notes);
+    if (prod.brand || prod.notes) {
+      setShowMoreDetails(true);
+    }
+    setSelectedDatabaseProduct(prod);
+    setIsDropdownOpen(false);
+    setError(null);
+  };
 
   if (!isOpen) return null;
 
@@ -115,7 +196,14 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
         productData.notes = notes.trim();
       }
 
-      await onSave(productData, productToEdit ? productToEdit.id : undefined);
+      await onSave(
+        productData,
+        productToEdit
+          ? productToEdit.id
+          : selectedDatabaseProduct
+          ? selectedDatabaseProduct.id
+          : undefined
+      );
       onClose();
     } catch (err: any) {
       setError(err?.message || 'Erro ao salvar o produto.');
@@ -248,26 +336,156 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
             </div>
           </div>
 
-          {/* 2. NOME DO PRODUTO */}
-          <div>
-            <label
-              htmlFor="input-modal-product-name"
-              className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5"
-            >
-              2. NOME DO PRODUTO
-            </label>
-            <input
-              id="input-modal-product-name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(capitalizeWords(e.target.value))}
-              placeholder="Nome do produto"
-              autoCapitalize="words"
-              autoComplete="off"
-              required
-              autoFocus
-              className="w-full px-4 py-3 bg-white border border-blue-200/90 rounded-2xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs"
-            />
+          {/* 2. NOME DO PRODUTO com busca em tempo real na base de dados */}
+          <div className="relative" ref={dropdownRef}>
+            <div className="flex items-center justify-between mb-1.5">
+              <label
+                htmlFor="input-modal-product-name"
+                className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider"
+              >
+                2. NOME DO PRODUTO
+              </label>
+              {matchingProducts.length > 0 && !selectedDatabaseProduct && (
+                <span className="text-[10px] text-blue-600 font-semibold">
+                  {matchingProducts.length} na base de dados
+                </span>
+              )}
+            </div>
+
+            <div className="relative">
+              <input
+                id="input-modal-product-name"
+                type="text"
+                value={name}
+                onChange={(e) => {
+                  const val = capitalizeWords(e.target.value);
+                  setName(val);
+                  setIsDropdownOpen(true);
+                  if (
+                    selectedDatabaseProduct &&
+                    normalizeSearchText(selectedDatabaseProduct.name) !== normalizeSearchText(val)
+                  ) {
+                    setSelectedDatabaseProduct(null);
+                  }
+                }}
+                onFocus={() => {
+                  if (name.trim().length > 0) {
+                    setIsDropdownOpen(true);
+                  }
+                }}
+                placeholder="Nome do produto"
+                autoCapitalize="words"
+                autoComplete="off"
+                required
+                autoFocus
+                className="w-full pl-4 pr-10 py-3 bg-white border border-blue-200/90 rounded-2xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs"
+              />
+
+              <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none flex items-center">
+                {selectedDatabaseProduct ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                ) : (
+                  <Search className="w-4 h-4 text-slate-400" />
+                )}
+              </div>
+            </div>
+
+            {/* Dropdown de sugestões da base de dados */}
+            {isDropdownOpen && matchingProducts.length > 0 && (
+              <div
+                id="database-product-dropdown"
+                className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white rounded-2xl shadow-xl border border-blue-100 overflow-hidden divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-150"
+              >
+                <div className="px-3.5 py-1.5 bg-blue-50/70 flex items-center justify-between text-[11px] font-semibold text-blue-900 border-b border-blue-100">
+                  <span className="flex items-center gap-1.5">
+                    <Package className="w-3.5 h-3.5 text-blue-600" />
+                    <span>Cadastrado na base ({matchingProducts.length})</span>
+                  </span>
+                  <span className="text-[10px] text-blue-600/80 font-normal">
+                    Clique para selecionar
+                  </span>
+                </div>
+
+                <div className="max-h-52 overflow-y-auto divide-y divide-slate-100">
+                  {matchingProducts.map((prod) => {
+                    const isAlreadyInList = prod.status !== 'comprado';
+                    const isSelectedThis = selectedDatabaseProduct?.id === prod.id;
+
+                    return (
+                      <button
+                        key={prod.id}
+                        type="button"
+                        onClick={() => handleSelectProduct(prod)}
+                        className={`w-full px-3.5 py-2.5 flex items-center justify-between gap-3 text-left transition-colors cursor-pointer group ${
+                          isSelectedThis
+                            ? 'bg-blue-50/90 text-blue-900'
+                            : 'hover:bg-blue-50/50 active:bg-blue-100/60'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-bold text-slate-800 group-hover:text-blue-600 truncate flex items-center gap-1.5">
+                            <span>{prod.name}</span>
+                            {prod.brand && (
+                              <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                {prod.brand}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+                            <span>Unidade: {prod.unit || 'unidade'}</span>
+                            <span>•</span>
+                            <span className="capitalize">
+                              Prioridade: {prod.urgency === 'urgente' ? 'Urgente' : prod.urgency === 'alta' ? 'Alta' : prod.urgency === 'baixa' ? 'Baixa' : 'Normal'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0">
+                          {isAlreadyInList ? (
+                            <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                              Na lista
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              Na base
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Feedback visual quando o produto foi selecionado da base */}
+            {selectedDatabaseProduct && (
+              <div className="mt-2 p-2.5 rounded-xl bg-blue-50/90 border border-blue-200/80 flex items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 text-blue-900 min-w-0">
+                  <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-medium text-[11px] truncate">
+                      Item selecionado da base de dados:{' '}
+                      <strong className="font-bold text-blue-700">{selectedDatabaseProduct.name}</strong>
+                      {selectedDatabaseProduct.brand ? ` (${selectedDatabaseProduct.brand})` : ''}
+                    </p>
+                    <p className="text-[10px] text-blue-600/90 mt-0.5">
+                      {selectedDatabaseProduct.status === 'comprado'
+                        ? 'Item cadastrado anteriormente. Ao salvar, ele será reincluído na lista!'
+                        : 'Este item já está na lista. Ao salvar, você atualizará os dados dele.'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedDatabaseProduct(null)}
+                  className="text-[11px] font-bold text-blue-600 hover:text-blue-800 shrink-0 px-2 py-1 rounded-md hover:bg-blue-100/80 transition-colors cursor-pointer"
+                  title="Desvincular produto da base"
+                >
+                  Limpar
+                </button>
+              </div>
+            )}
           </div>
 
           {/* 3. QUANTIDADE */}

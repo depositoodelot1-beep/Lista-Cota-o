@@ -256,11 +256,21 @@ export default function App() {
     if (editId) {
       // Check permissions
       const prod = products.find((p) => p.id === editId);
-      if (prod && currentUser.role !== 'admin' && prod.responsibleId !== currentUser.id) {
+      if (
+        prod &&
+        currentUser.role !== 'admin' &&
+        prod.responsibleId !== currentUser.id &&
+        prod.status !== 'comprado' &&
+        editingProduct // only restrict if editing an existing active item directly
+      ) {
         throw new Error('Você só pode editar produtos cadastrados por você mesmo.');
       }
       await updateProduct(editId, productData);
-      addToast('Produto atualizado com sucesso!');
+      addToast(
+        prod?.status === 'comprado'
+          ? `"${productData.name}" reincluído na lista de compras!`
+          : 'Produto atualizado com sucesso!'
+      );
     } else {
       await addProduct(productData);
       addToast('Novo produto adicionado à lista!');
@@ -672,6 +682,7 @@ export default function App() {
         productToEdit={editingProduct}
         users={users}
         currentUser={currentUser}
+        allProducts={products}
         onClose={() => {
           setIsAddEditOpen(false);
           setEditingProduct(null);
