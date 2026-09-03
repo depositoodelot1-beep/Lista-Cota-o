@@ -25,6 +25,7 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { ProductCatalogModal } from './components/ProductCatalogModal';
 import { ShoppingBag, Plus, RefreshCw, AlertCircle, CheckCheck, Package } from 'lucide-react';
+import { normalizeSearchText } from './utils/text';
 
 export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -124,32 +125,28 @@ export default function App() {
   const filteredProducts = useMemo(() => {
     let result = [...products];
 
+    // Exclusivamente produtos que estão na lista de compras ativa (não comprados)
+    result = result.filter((p) => p.status !== 'comprado');
+
     // Filter by responsible
     if (selectedUserId) {
       result = result.filter((p) => p.responsibleId === selectedUserId);
     }
 
-    // Filter by search
+    // Filter by search (nome, marca ou responsável)
     if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(
-        (p) =>
-          p.name.toLowerCase().includes(term) ||
-          (p.brand && p.brand.toLowerCase().includes(term)) ||
-          p.responsibleName.toLowerCase().includes(term)
-      );
+      const term = normalizeSearchText(searchTerm);
+      result = result.filter((p) => {
+        const nameNorm = normalizeSearchText(p.name);
+        const brandNorm = normalizeSearchText(p.brand || '');
+        const respNorm = normalizeSearchText(p.responsibleName || '');
+        return nameNorm.includes(term) || brandNorm.includes(term) || respNorm.includes(term);
+      });
     }
 
     // Filter by priority / urgency
     if (selectedUrgency !== 'all') {
       result = result.filter((p) => (p.urgency || 'media') === selectedUrgency);
-    }
-
-    // Filter by status: in active shopping list, items marked as 'comprado' exit the active list
-    if (statusFilter !== 'all') {
-      result = result.filter((p) => p.status === statusFilter);
-    } else {
-      result = result.filter((p) => p.status !== 'comprado');
     }
 
     // Sort
@@ -168,7 +165,7 @@ export default function App() {
     });
 
     return result;
-  }, [products, selectedUserId, selectedUrgency, searchTerm, statusFilter, sortField, sortDirection]);
+  }, [products, selectedUserId, selectedUrgency, searchTerm, sortField, sortDirection]);
 
   // Contagem de itens por prioridade na lista ativa
   const urgencyCounts = useMemo(() => {
@@ -396,6 +393,14 @@ export default function App() {
             onOpenCatalog={() => setIsCatalogOpen(true)}
           />
 
+          {/* Filtro de Busca na Lista de Compras */}
+          <SearchAndFilters
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            resultCount={filteredProducts.length}
+            placeholder="Pesquisar produto ou marca na lista..."
+          />
+
           {/* Filtro por Prioridade */}
           <PriorityFilter
             selectedUrgency={selectedUrgency}
@@ -418,22 +423,6 @@ export default function App() {
             onClearSelection={() => setSelectedProductIds([])}
           />
 
-          {/* Search and Filters Bar */}
-          {(isSearchOpen || searchTerm) && (
-            <SearchAndFilters
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-              statusFilter={statusFilter}
-              onStatusFilterChange={setStatusFilter}
-              sortField={sortField}
-              sortDirection={sortDirection}
-              onSortChange={(f, d) => {
-                setSortField(f);
-                setSortDirection(d);
-              }}
-            />
-          )}
-
           {/* Products List Area */}
           <main
             id="main-content"
@@ -452,19 +441,40 @@ export default function App() {
                 <div className="w-14 h-14 rounded-full bg-blue-50 text-blue-600 mx-auto flex items-center justify-center mb-3">
                   <ShoppingBag className="w-7 h-7" />
                 </div>
-                <h3 className="text-base font-bold text-slate-800">Nenhum produto encontrado</h3>
+                <h3 className="text-base font-bold text-slate-800">
+                  {searchTerm.trim() ? `"${searchTerm}" não está na lista` : 'Nenhum produto encontrado'}
+                </h3>
                 <p className="text-xs text-slate-500 max-w-xs mx-auto mt-1 mb-4">
-                  {searchTerm || selectedUserId || statusFilter !== 'all'
-                    ? 'Nenhum item corresponde aos filtros. Tente limpar a busca.'
-                    : 'Não há itens em falta ou com baixo estoque no momento.'}
+                  {searchTerm.trim()
+                    ? 'Este item não está na lista de compras atual ou já foi comprado.'
+                    : selectedUserId || selectedUrgency !== 'all'
+                    ? 'Nenhum item corresponde aos filtros selecionados.'
+                    : 'Não há itens para comprar no momento.'}
                 </p>
-                {searchTerm || selectedUserId || statusFilter !== 'all' ? (
+                {searchTerm.trim() ? (
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSearchTerm('')}
+                      className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors cursor-pointer"
+                    >
+                      Limpar busca
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsCatalogOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs font-bold transition-colors cursor-pointer border border-blue-200/80"
+                    >
+                      <Package className="w-4 h-4" />
+                      <span>Ver na Base de Produtos</span>
+                    </button>
+                  </div>
+                ) : selectedUserId || selectedUrgency !== 'all' ? (
                   <button
                     type="button"
                     onClick={() => {
-                      setSearchTerm('');
                       setSelectedUserId(null);
-                      setStatusFilter('all');
+                      setSelectedUrgency('all');
                     }}
                     className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-medium text-slate-700 transition-colors cursor-pointer"
                   >
