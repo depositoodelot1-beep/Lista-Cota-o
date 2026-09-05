@@ -15,8 +15,9 @@ import {
   Check,
   Filter,
   ScanBarcode,
+  Camera,
 } from 'lucide-react';
-import { Product, AppUser } from '../types';
+import { Product, AppUser, ProductUrgency, normalizeUrgency } from '../types';
 import { capitalizeWords, normalizeSearchText } from '../utils/text';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
 
@@ -28,7 +29,7 @@ interface ProductCatalogModalProps {
   onReincludeToShoppingList: (
     product: Product,
     quantity?: number,
-    urgency?: 'alta' | 'media' | 'baixa' | 'urgente'
+    urgency?: ProductUrgency
   ) => Promise<void>;
   onEditProduct: (product: Product) => void;
   onDeleteProduct: (product: Product) => void;
@@ -53,7 +54,7 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
   // State for customizing re-inclusion (quantity & urgency popup)
   const [reincludingProduct, setReincludingProduct] = useState<Product | null>(null);
   const [reincludeQty, setReincludeQty] = useState<number>(1);
-  const [reincludeUrgency, setReincludeUrgency] = useState<'alta' | 'media' | 'baixa' | 'urgente'>('alta');
+  const [reincludeUrgency, setReincludeUrgency] = useState<ProductUrgency>('normal');
   const [submittingId, setSubmittingId] = useState<string | null>(null);
 
   // Barcode scanner state in Database Catalog
@@ -128,7 +129,7 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
   const handleStartReinclude = (product: Product) => {
     setReincludingProduct(product);
     setReincludeQty(product.quantity > 0 ? product.quantity : 1);
-    setReincludeUrgency(product.urgency || 'alta');
+    setReincludeUrgency(normalizeUrgency(product.urgency));
   };
 
   const handleConfirmReinclude = async () => {
@@ -148,7 +149,7 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
       await onReincludeToShoppingList(
         product,
         product.quantity > 0 ? product.quantity : 1,
-        product.urgency || 'alta'
+        normalizeUrgency(product.urgency)
       );
     } finally {
       setSubmittingId(null);
@@ -393,14 +394,24 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
                       : 'bg-white border-slate-100 hover:border-slate-200 shadow-2xs'
                   }`}
                 >
-                  {/* Left info: Avatar + Title & Details */}
+                  {/* Left info: Photo + Title & Details */}
                   <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className="w-9 h-9 rounded-full border border-slate-300/80 flex items-center justify-center font-medium text-sm text-slate-700 shrink-0 bg-white select-none shadow-2xs"
-                      title={`Cadastrado por: ${product.responsibleName}`}
-                    >
-                      {product.responsibleInitial || 'U'}
-                    </div>
+                    {product.imageUrl ? (
+                      <div className="relative w-10 h-10 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 shrink-0 shadow-2xs">
+                        <img
+                          src={product.imageUrl}
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div
+                        className="w-10 h-10 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-slate-400 shrink-0 shadow-2xs"
+                        title="Sem foto cadastrada"
+                      >
+                        <Camera className="w-4 h-4 text-slate-400" />
+                      </div>
+                    )}
 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -415,20 +426,46 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
                       </div>
 
                       <div className="flex items-center gap-2 mt-1 flex-wrap text-xs text-slate-500">
-                        {/* Status Badge */}
+                        {/* Status Badge + Letra de quem entrou o produto na frente da quantidade */}
                         {isInShoppingList ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200/80 px-1.5 py-0.5 rounded-md">
-                            Na Lista ({product.quantity} {product.unit || 'un'})
-                          </span>
+                          <div className="inline-flex items-center gap-1.5 bg-blue-50 border border-blue-200/80 px-2 py-0.5 rounded-md">
+                            <span
+                              className="w-4 h-4 rounded-full border border-blue-300 bg-white flex items-center justify-center font-bold text-[9px] text-slate-700 select-none shadow-2xs"
+                              title={`Cadastrado por: ${product.responsibleName}`}
+                            >
+                              {product.responsibleInitial || 'U'}
+                            </span>
+                            <span className="text-[10px] font-bold text-blue-700">
+                              Na Lista ({product.quantity} {product.unit || 'un'})
+                            </span>
+                          </div>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded-md">
-                            Fora da Lista (Comprado)
-                          </span>
+                          <div className="inline-flex items-center gap-1.5 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
+                            <span
+                              className="w-4 h-4 rounded-full border border-slate-300 bg-white flex items-center justify-center font-bold text-[9px] text-slate-700 select-none shadow-2xs"
+                              title={`Cadastrado por: ${product.responsibleName}`}
+                            >
+                              {product.responsibleInitial || 'U'}
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-500">
+                              Fora da Lista (Comprado)
+                            </span>
+                          </div>
                         )}
 
                         {/* Urgency */}
-                        <span className="text-[11px] text-slate-400">
-                          Urgência: <span className="font-medium text-slate-600 capitalize">{product.urgency}</span>
+                        <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                          Prioridade:
+                          {(() => {
+                            const u = normalizeUrgency(product.urgency);
+                            if (u === 'novo') {
+                              return <span className="font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px]">NOVO</span>;
+                            }
+                            if (u === 'urgente') {
+                              return <span className="font-bold text-red-700 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded text-[10px]">URGENTE</span>;
+                            }
+                            return <span className="font-bold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded text-[10px]">NORMAL</span>;
+                          })()}
                         </span>
 
                         {product.notes && (
@@ -569,23 +606,22 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
             {/* Urgency */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Nível de Urgência
+                Prioridade
               </label>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-3 gap-1.5">
                 {[
-                  { key: 'baixa', label: 'Baixa', color: 'border-blue-300 text-blue-700 bg-blue-50' },
-                  { key: 'media', label: 'Normal', color: 'border-emerald-300 text-emerald-700 bg-emerald-50' },
-                  { key: 'alta', label: 'Alta', color: 'border-amber-300 text-amber-800 bg-amber-50' },
-                  { key: 'urgente', label: 'Urgente', color: 'border-red-300 text-red-700 bg-red-50' },
+                  { key: 'novo', label: 'NOVO', activeClass: 'bg-emerald-600 text-white shadow-xs', hoverClass: 'hover:bg-emerald-50 hover:text-emerald-700' },
+                  { key: 'normal', label: 'NORMAL', activeClass: 'bg-amber-400 text-amber-950 font-bold shadow-xs', hoverClass: 'hover:bg-amber-50 hover:text-amber-800' },
+                  { key: 'urgente', label: 'URGENTE', activeClass: 'bg-red-600 text-white shadow-xs', hoverClass: 'hover:bg-red-50 hover:text-red-700' },
                 ].map((u) => (
                   <button
                     key={u.key}
                     type="button"
-                    onClick={() => setReincludeUrgency(u.key as any)}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center ${
+                    onClick={() => setReincludeUrgency(u.key as ProductUrgency)}
+                    className={`py-2 px-2 rounded-xl border text-xs font-bold transition-all cursor-pointer text-center ${
                       reincludeUrgency === u.key
-                        ? `${u.color} ring-2 ring-blue-500/20 shadow-2xs`
-                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        ? u.activeClass
+                        : `border-slate-200 text-slate-600 ${u.hoverClass}`
                     }`}
                   >
                     {u.label}

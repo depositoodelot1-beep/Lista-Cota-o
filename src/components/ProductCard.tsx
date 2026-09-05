@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MoreVertical, Edit2, Trash2, CheckCircle2, Clock, AlertOctagon, User, Check, Barcode } from 'lucide-react';
-import { Product, AppUser } from '../types';
+import { MoreVertical, Edit2, Trash2, CheckCircle2, Clock, AlertOctagon, User, Check, Barcode, ZoomIn, X, Camera } from 'lucide-react';
+import { Product, AppUser, normalizeUrgency } from '../types';
+import { updateProduct } from '../services/db';
+import { compressProductImage } from '../utils/image';
 
 interface ProductCardProps {
   product: Product;
@@ -9,7 +11,7 @@ interface ProductCardProps {
   onToggleSelect?: (product: Product) => void;
   onEdit: (product: Product) => void;
   onDelete: (product: Product) => void;
-  onToggleStatus: (product: Product) => void;
+  onToggleStatus?: (product: Product) => void;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
@@ -22,6 +24,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onToggleStatus,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isZoomOpen, setIsZoomOpen] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on click outside
@@ -41,6 +46,22 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
   const canEdit = currentUser.role === 'admin' || product.responsibleId === currentUser.id;
   const canDelete = currentUser.role === 'admin';
+
+  const handleQuickPhotoCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploadingPhoto(true);
+      const compressed = await compressProductImage(file, 800, 0.82);
+      await updateProduct(product.id, { imageUrl: compressed });
+    } catch (err) {
+      console.error('Erro ao atualizar foto do produto:', err);
+    } finally {
+      setIsUploadingPhoto(false);
+      e.target.value = '';
+    }
+  };
 
   // Format date and time
   const formattedDate = (() => {
@@ -62,41 +83,34 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const isBought = product.status === 'comprado';
 
   // Priority styling configuration per user request
-  // Baixa = Azul, Normal = Verde, Alta = Amarelo, Urgente = Vermelho
+  // NOVO = Verde, NORMAL = Amarelo, URGENTE = Vermelho
   const priorityConfig = (() => {
-    switch (product.urgency) {
-      case 'baixa':
+    const urgency = normalizeUrgency(product.urgency);
+    switch (urgency) {
+      case 'novo':
         return {
-          label: 'Baixa',
-          color: '#2563eb', // Blue
-          badgeBg: 'bg-blue-50',
-          badgeText: 'text-blue-700',
-          badgeBorder: 'border-blue-200/60',
-        };
-      case 'alta':
-        return {
-          label: 'Alta',
-          color: '#d97706', // Yellow / Amber
-          badgeBg: 'bg-amber-50',
-          badgeText: 'text-amber-700',
-          badgeBorder: 'border-amber-200/70',
+          label: 'NOVO',
+          color: '#059669', // Verde
+          badgeBg: 'bg-emerald-50',
+          badgeText: 'text-emerald-700',
+          badgeBorder: 'border-emerald-200',
         };
       case 'urgente':
         return {
-          label: 'Urgente',
-          color: '#dc2626', // Red
+          label: 'URGENTE',
+          color: '#dc2626', // Vermelho
           badgeBg: 'bg-red-50',
           badgeText: 'text-red-700',
-          badgeBorder: 'border-red-200/60',
+          badgeBorder: 'border-red-200',
         };
-      case 'media':
+      case 'normal':
       default:
         return {
-          label: 'Normal',
-          color: '#16a34a', // Green
-          badgeBg: 'bg-emerald-50',
-          badgeText: 'text-emerald-700',
-          badgeBorder: 'border-emerald-200/60',
+          label: 'NORMAL',
+          color: '#d97706', // Amarelo
+          badgeBg: 'bg-amber-50',
+          badgeText: 'text-amber-800',
+          badgeBorder: 'border-amber-300',
         };
     }
   })();
@@ -133,13 +147,61 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </button>
         )}
 
-        {/* Circular Avatar showing who added */}
-        <div
-          className="w-9 h-9 rounded-full border border-slate-300/80 flex items-center justify-center font-medium text-sm text-slate-700 shrink-0 bg-white select-none shadow-2xs"
-          title={`Cadastrado por: ${product.responsibleName}`}
-        >
-          {product.responsibleInitial || 'U'}
-        </div>
+        {/* Input oculto para captura direta da foto do produto pela câmera */}
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handleQuickPhotoCapture}
+        />
+
+        {/* Área da Foto do Produto */}
+        {product.imageUrl ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsZoomOpen(true);
+            }}
+            className="relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 shrink-0 shadow-2xs group cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+            title="Clique para ver a foto ampliada"
+            aria-label={`Ver foto ampliada de ${product.name}`}
+          >
+            <img
+              src={product.imageUrl}
+              alt={product.name}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+            />
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 flex items-center justify-center transition-colors">
+              <ZoomIn className="w-3.5 h-3.5 text-white opacity-0 group-hover:opacity-100 drop-shadow-sm transition-opacity" />
+            </div>
+          </button>
+        ) : (
+          /* Placeholder de foto do produto (Permite tirar foto na hora clicando) */
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              cameraInputRef.current?.click();
+            }}
+            className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl border border-dashed border-slate-300 bg-slate-50 hover:bg-blue-50/70 hover:border-blue-400 flex flex-col items-center justify-center text-slate-400 hover:text-blue-600 transition-colors shrink-0 shadow-2xs cursor-pointer group"
+            title="Tirar foto do produto com a câmera do celular"
+            aria-label={`Adicionar foto de ${product.name}`}
+          >
+            {isUploadingPhoto ? (
+              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <>
+                <Camera className="w-4 h-4 text-slate-400 group-hover:text-blue-600 transition-colors" />
+                <span className="text-[8px] font-semibold text-slate-400 group-hover:text-blue-600 leading-none mt-0.5">
+                  Foto
+                </span>
+              </>
+            )}
+          </button>
+        )}
 
         {/* Center content: Product name and (Priority + Quantity) */}
         <div className="min-w-0 flex-1">
@@ -167,8 +229,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             )}
           </div>
 
-          {/* Bottom Line: Priority pill + Quantity */}
-          <div className="flex items-center gap-2 mt-1">
+          {/* Bottom Line: Priority pill + Responsible Initial na frente da Quantity */}
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
             {/* Priority Tag matching user image */}
             <span
               className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-md border ${priorityConfig.badgeBg} ${priorityConfig.badgeText} ${priorityConfig.badgeBorder} shrink-0`}
@@ -177,18 +239,34 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               {priorityConfig.label}
             </span>
 
-            {/* Quantity in blue */}
-            <span
-              className="text-xs sm:text-sm font-bold text-blue-600 shrink-0"
-              title={`Quantidade: ${product.quantity} ${product.unit || 'un'}`}
+            {/* Informação com a letra de quem entrou o produto NA FRENTE do número da quantidade */}
+            <div
+              className="flex items-center gap-1.5 shrink-0"
+              title={`Cadastrado por: ${product.responsibleName}`}
             >
-              {product.quantity}
-              {product.unit && product.unit !== 'unidade' && (
-                <span className="text-[11px] font-normal text-blue-500 ml-1">
-                  {product.unit}
-                </span>
-              )}
-            </span>
+              <span
+                className="w-5 h-5 rounded-full border border-slate-300/90 bg-white flex items-center justify-center font-bold text-[10px] text-slate-700 select-none shrink-0 shadow-2xs"
+                style={{
+                  borderColor: product.responsibleColor ? `${product.responsibleColor}90` : '#cbd5e1',
+                  color: product.responsibleColor || '#334155',
+                }}
+              >
+                {product.responsibleInitial || 'U'}
+              </span>
+
+              {/* Quantity in blue */}
+              <span
+                className="text-xs sm:text-sm font-bold text-blue-600 shrink-0"
+                title={`Quantidade: ${product.quantity} ${product.unit || 'un'}`}
+              >
+                {product.quantity}
+                {product.unit && product.unit !== 'unidade' && (
+                  <span className="text-[11px] font-normal text-blue-500 ml-0.5">
+                    {product.unit}
+                  </span>
+                )}
+              </span>
+            </div>
 
             {product.barcode && (
               <span
@@ -279,6 +357,43 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </div>
         )}
       </div>
+
+      {/* Modal de Zoom da Foto */}
+      {isZoomOpen && product.imageUrl && (
+        <div
+          id={`photo-zoom-${product.id}`}
+          className="fixed inset-0 z-60 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsZoomOpen(false);
+          }}
+        >
+          <div
+            className="relative max-w-sm w-full bg-slate-900 rounded-3xl overflow-hidden p-3 shadow-2xl border border-slate-800 animate-in fade-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-2 py-1.5 text-white mb-2">
+              <div className="min-w-0 pr-2">
+                <h4 className="text-xs font-bold truncate">{product.name}</h4>
+                {product.brand && <p className="text-[10px] text-slate-400">{product.brand}</p>}
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsZoomOpen(false)}
+                className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white rounded-full hover:bg-white/10 cursor-pointer"
+                title="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <img
+              src={product.imageUrl}
+              alt={product.name}
+              className="w-full max-h-[65vh] object-contain rounded-2xl bg-black"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

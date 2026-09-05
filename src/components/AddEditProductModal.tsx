@@ -16,9 +16,14 @@ import {
   Database,
   ListPlus,
   Sparkles,
+  Camera,
+  Image as ImageIcon,
+  Trash2,
+  ZoomIn,
 } from 'lucide-react';
-import { Product, AppUser } from '../types';
+import { Product, AppUser, ProductUrgency, normalizeUrgency } from '../types';
 import { capitalizeWords, normalizeSearchText } from '../utils/text';
+import { compressProductImage } from '../utils/image';
 import { BarcodeScannerModal } from './BarcodeScannerModal';
 
 interface AddEditProductModalProps {
@@ -49,9 +54,14 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
   const [quantity, setQuantity] = useState<number | string>(1);
   const [unit, setUnit] = useState('unidade');
   const [responsibleId, setResponsibleId] = useState(currentUser.id);
-  const [urgency, setUrgency] = useState<'baixa' | 'media' | 'alta' | 'urgente'>('media');
+  const [urgency, setUrgency] = useState<ProductUrgency>('normal');
   const [notes, setNotes] = useState('');
   const [barcode, setBarcode] = useState('');
+  const [imageUrl, setImageUrl] = useState<string>('');
+  const [isCompressingPhoto, setIsCompressingPhoto] = useState(false);
+  const [isViewingPhotoModal, setIsViewingPhotoModal] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [saveDestination, setSaveDestination] = useState<'both' | 'database_only'>('both');
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,9 +88,10 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
       setQuantity(productToEdit.quantity ?? 1);
       setUnit(productToEdit.unit || 'unidade');
       setResponsibleId(productToEdit.responsibleId || currentUser.id);
-      setUrgency(productToEdit.urgency || 'media');
+      setUrgency(normalizeUrgency(productToEdit.urgency));
       setBarcode(productToEdit.barcode || '');
       setNotes(productToEdit.notes || '');
+      setImageUrl(productToEdit.imageUrl || '');
       setSelectedDatabaseProduct(productToEdit);
       setSaveDestination('both');
       if (productToEdit.brand || productToEdit.notes || productToEdit.barcode) {
@@ -92,9 +103,10 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
       setQuantity(1);
       setUnit('unidade');
       setResponsibleId(currentUser.id);
-      setUrgency('media'); // 'Normal' selected by default like in screenshot
+      setUrgency('normal');
       setBarcode(initialBarcode || '');
       setNotes('');
+      setImageUrl('');
       setSaveDestination('both');
       setShowMoreDetails(Boolean(initialBarcode));
       setSelectedDatabaseProduct(null);
@@ -161,15 +173,34 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
     } else {
       setQuantity(1);
     }
-    if (prod.urgency) setUrgency(prod.urgency);
+    if (prod.urgency) setUrgency(normalizeUrgency(prod.urgency));
     if (prod.barcode) setBarcode(prod.barcode);
     if (prod.notes) setNotes(prod.notes);
+    if (prod.imageUrl) setImageUrl(prod.imageUrl);
     if (prod.brand || prod.notes || prod.barcode) {
       setShowMoreDetails(true);
     }
     setSelectedDatabaseProduct(prod);
     setIsDropdownOpen(false);
     setError(null);
+  };
+
+  const handlePhotoCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsCompressingPhoto(true);
+      setError(null);
+      const compressed = await compressProductImage(file, 800, 0.82);
+      setImageUrl(compressed);
+    } catch (err: any) {
+      console.error('Erro ao processar foto:', err);
+      setError(err?.message || 'Não foi possível processar a imagem.');
+    } finally {
+      setIsCompressingPhoto(false);
+      e.target.value = '';
+    }
   };
 
   const handleBarcodeDetected = (code: string) => {
@@ -273,6 +304,9 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
       }
       if (notes.trim()) {
         productData.notes = notes.trim();
+      }
+      if (imageUrl) {
+        productData.imageUrl = imageUrl;
       }
 
       await onSave(
@@ -611,7 +645,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
                             <span>Unidade: {prod.unit || 'unidade'}</span>
                             <span>•</span>
                             <span className="capitalize">
-                              Prioridade: {prod.urgency === 'urgente' ? 'Urgente' : prod.urgency === 'alta' ? 'Alta' : prod.urgency === 'baixa' ? 'Baixa' : 'Normal'}
+                              Prioridade: {normalizeUrgency(prod.urgency) === 'urgente' ? 'Urgente' : normalizeUrgency(prod.urgency) === 'novo' ? 'Novo' : 'Normal'}
                             </span>
                           </div>
                         </div>
@@ -745,59 +779,183 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
             </div>
           </div>
 
-          {/* 4. PRIORIDADE */}
+          {/* 4. PRIORIDADE (NOVO = Verde, NORMAL = Amarelo, URGENTE = Vermelho) */}
           <div>
             <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
               4. PRIORIDADE
             </span>
 
-            {/* Priority Tabs with specific colors per user request */}
-            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100/80 rounded-2xl">
+            {/* 3 Opções de Prioridade: NOVO (Verde), NORMAL (Amarelo) e URGENTE (Vermelho) */}
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100/80 rounded-2xl">
               <button
+                id="btn-priority-novo"
                 type="button"
-                onClick={() => setUrgency('baixa')}
-                className={`py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
-                  urgency === 'baixa'
-                    ? 'bg-blue-600 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-blue-600 hover:bg-slate-200/60'
+                onClick={() => setUrgency('novo')}
+                className={`py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  urgency === 'novo'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-emerald-700 hover:bg-emerald-50'
                 }`}
               >
-                Baixa
+                NOVO
               </button>
               <button
+                id="btn-priority-normal"
                 type="button"
-                onClick={() => setUrgency('media')}
-                className={`py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
-                  urgency === 'media'
-                    ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-emerald-600 hover:bg-slate-200/60'
+                onClick={() => setUrgency('normal')}
+                className={`py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                  urgency === 'normal'
+                    ? 'bg-amber-400 text-amber-950 shadow-xs'
+                    : 'text-slate-600 hover:text-amber-800 hover:bg-amber-50'
                 }`}
               >
-                Normal
+                NORMAL
               </button>
               <button
-                type="button"
-                onClick={() => setUrgency('alta')}
-                className={`py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
-                  urgency === 'alta'
-                    ? 'bg-amber-500 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-amber-600 hover:bg-slate-200/60'
-                }`}
-              >
-                Alta
-              </button>
-              <button
+                id="btn-priority-urgente"
                 type="button"
                 onClick={() => setUrgency('urgente')}
-                className={`py-2 text-xs font-medium rounded-xl transition-all cursor-pointer ${
+                className={`py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                   urgency === 'urgente'
-                    ? 'bg-red-600 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-red-600 hover:bg-slate-200/60'
+                    ? 'bg-red-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-red-700 hover:bg-red-50'
                 }`}
               >
-                Urgente
+                URGENTE
               </button>
             </div>
+          </div>
+
+          {/* 5. FOTO DO PRODUTO (Câmera do Celular / Galeria) */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                5. FOTO DO PRODUTO <span className="text-[9px] font-normal text-slate-400 normal-case">(Opcional)</span>
+              </span>
+              {imageUrl && (
+                <button
+                  type="button"
+                  onClick={() => setImageUrl('')}
+                  className="text-[10px] font-semibold text-red-500 hover:text-red-700 flex items-center gap-1 cursor-pointer"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Remover foto</span>
+                </button>
+              )}
+            </div>
+
+            {/* Inputs nativos ocultos (um com capture='environment' para abrir a câmera diretamente no celular) */}
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handlePhotoCapture}
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoCapture}
+            />
+
+            {imageUrl ? (
+              <div className="p-2.5 bg-slate-50/90 rounded-2xl border border-slate-200/80 flex items-center gap-3">
+                {/* Thumbnail clicável para ampliar */}
+                <button
+                  type="button"
+                  onClick={() => setIsViewingPhotoModal(true)}
+                  className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-slate-200 bg-white shrink-0 shadow-2xs group cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  title="Clique para ver a foto ampliada"
+                >
+                  <img
+                    src={imageUrl}
+                    alt={name || 'Foto do produto'}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                  />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 flex items-center justify-center transition-colors">
+                    <ZoomIn className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 drop-shadow-sm transition-opacity" />
+                  </div>
+                </button>
+
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-bold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Foto anexada com sucesso</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-tight">
+                    A foto ajudará a equipe a reconhecer a embalagem exata do produto.
+                  </p>
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => cameraInputRef.current?.click()}
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <Camera className="w-3 h-3" />
+                      <span>Tirar outra</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-800 bg-slate-200/60 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <ImageIcon className="w-3 h-3" />
+                      <span>Galeria</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-slate-50/80 rounded-2xl border border-dashed border-slate-200 hover:border-blue-400/60 transition-colors">
+                {isCompressingPhoto ? (
+                  <div className="flex flex-col items-center justify-center py-3 space-y-2 text-blue-600">
+                    <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs font-semibold text-slate-600">Comprimindo foto para envio rápido...</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
+                        <Camera className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-800">
+                          Foto da embalagem / produto
+                        </p>
+                        <p className="text-[11px] text-slate-400 truncate">
+                          Tire uma foto para ajudar a reconhecer o item
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        id="btn-take-product-photo"
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-all"
+                      >
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Câmera do Celular</span>
+                      </button>
+                      <button
+                        id="btn-upload-product-photo"
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="inline-flex items-center justify-center gap-1 px-2.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium cursor-pointer transition-colors"
+                        title="Escolher foto da galeria"
+                      >
+                        <ImageIcon className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Galeria</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Opcional: Detalhes extras (Marca, Observações) recolhível para manter o visual limpo */}
@@ -843,24 +1001,6 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
                   </div>
                 </div>
 
-                <div>
-                  <label
-                    htmlFor="input-modal-brand"
-                    className="block text-[10px] font-bold text-slate-500 uppercase mb-1"
-                  >
-                    Marca / Fabricante
-                  </label>
-                  <input
-                    id="input-modal-brand"
-                    type="text"
-                    value={brand}
-                    onChange={(e) => setBrand(capitalizeWords(e.target.value))}
-                    placeholder="Ex: Tigre, Tramontina..."
-                    autoCapitalize="words"
-                    autoComplete="off"
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-hidden focus:border-blue-500"
-                  />
-                </div>
                 <div>
                   <label
                     htmlFor="input-modal-notes"
@@ -956,6 +1096,37 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
         onClose={() => setIsScannerOpen(false)}
         onDetected={handleBarcodeDetected}
       />
+
+      {/* Modal de Zoom da Foto do Produto */}
+      {isViewingPhotoModal && imageUrl && (
+        <div
+          id="photo-zoom-modal"
+          className="fixed inset-0 z-60 bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setIsViewingPhotoModal(false)}
+        >
+          <div
+            className="relative max-w-sm w-full bg-slate-900 rounded-3xl overflow-hidden p-3 shadow-2xl border border-slate-800 animate-in fade-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-1 py-1.5 text-white mb-2">
+              <span className="text-xs font-bold truncate">{name || 'Foto do Produto'}</span>
+              <button
+                type="button"
+                onClick={() => setIsViewingPhotoModal(false)}
+                className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-white rounded-full hover:bg-white/10 cursor-pointer"
+                title="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <img
+              src={imageUrl}
+              alt={name || 'Foto do Produto'}
+              className="w-full max-h-[65vh] object-contain rounded-2xl bg-black"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

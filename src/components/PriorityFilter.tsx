@@ -1,15 +1,14 @@
 import React from 'react';
 
-export type UrgencyFilterType = 'all' | 'baixa' | 'media' | 'alta' | 'urgente';
+export type UrgencyFilterType = 'all' | 'novo' | 'normal' | 'urgente';
 
 interface PriorityFilterProps {
   selectedUrgency: UrgencyFilterType;
   onSelectUrgency: (urgency: UrgencyFilterType) => void;
   counts: {
     all: number;
-    baixa: number;
-    media: number;
-    alta: number;
+    novo: number;
+    normal: number;
     urgente: number;
   };
 }
@@ -40,34 +39,24 @@ export const PriorityFilter: React.FC<PriorityFilterProps> = ({
       countInactive: 'text-slate-400',
     },
     {
-      id: 'baixa',
-      letter: 'B',
-      fullName: 'Baixa',
-      count: counts.baixa,
-      activeClasses: 'bg-blue-600 text-white shadow-xs ring-2 ring-blue-300/60',
-      inactiveClasses: 'bg-blue-50/90 text-blue-700 border border-blue-200/80 hover:bg-blue-100',
-      countActive: 'text-blue-100',
-      countInactive: 'text-blue-500',
-    },
-    {
-      id: 'media',
+      id: 'novo',
       letter: 'N',
-      fullName: 'Normal',
-      count: counts.media,
+      fullName: 'Novo',
+      count: counts.novo,
       activeClasses: 'bg-emerald-600 text-white shadow-xs ring-2 ring-emerald-300/60',
-      inactiveClasses: 'bg-emerald-50/90 text-emerald-700 border border-emerald-200/80 hover:bg-emerald-100',
+      inactiveClasses: 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100',
       countActive: 'text-emerald-100',
       countInactive: 'text-emerald-600',
     },
     {
-      id: 'alta',
-      letter: 'A',
-      fullName: 'Alta',
-      count: counts.alta,
-      activeClasses: 'bg-amber-500 text-white shadow-xs ring-2 ring-amber-300/60',
-      inactiveClasses: 'bg-amber-50/90 text-amber-800 border border-amber-200/80 hover:bg-amber-100',
-      countActive: 'text-amber-100',
-      countInactive: 'text-amber-600',
+      id: 'normal',
+      letter: 'M',
+      fullName: 'Normal',
+      count: counts.normal,
+      activeClasses: 'bg-amber-400 text-amber-950 font-bold shadow-xs ring-2 ring-amber-300/60',
+      inactiveClasses: 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100',
+      countActive: 'text-amber-900',
+      countInactive: 'text-amber-700',
     },
     {
       id: 'urgente',
@@ -75,7 +64,7 @@ export const PriorityFilter: React.FC<PriorityFilterProps> = ({
       fullName: 'Urgente',
       count: counts.urgente,
       activeClasses: 'bg-red-600 text-white shadow-xs ring-2 ring-red-300/60',
-      inactiveClasses: 'bg-red-50/90 text-red-700 border border-red-200/80 hover:bg-red-100',
+      inactiveClasses: 'bg-red-50 text-red-700 border border-red-200 hover:bg-red-100',
       countActive: 'text-red-100',
       countInactive: 'text-red-500',
     },
@@ -83,7 +72,7 @@ export const PriorityFilter: React.FC<PriorityFilterProps> = ({
 
   return (
     <div id="priority-filter-section" className="px-4 sm:px-5 py-2.5 bg-slate-50/90 border-b border-slate-100">
-      <div className="grid grid-cols-5 gap-1.5 sm:gap-2 w-full">
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-2 w-full">
         {allPriorities.map((item) => {
           const isSelected = selectedUrgency === item.id;
           return (

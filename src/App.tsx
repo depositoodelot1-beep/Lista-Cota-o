@@ -11,7 +11,7 @@ import {
   deleteUser,
   DEFAULT_USERS,
 } from './services/db';
-import { Product, AppUser, ProductStatus, SortField, SortDirection } from './types';
+import { Product, AppUser, ProductStatus, SortField, SortDirection, ProductUrgency, normalizeUrgency } from './types';
 import { Header } from './components/Header';
 import { ResponsibleFilter } from './components/ResponsibleFilter';
 import { ProductCard } from './components/ProductCard';
@@ -162,7 +162,7 @@ export default function App() {
 
     // Filter by priority / urgency
     if (selectedUrgency !== 'all') {
-      result = result.filter((p) => (p.urgency || 'media') === selectedUrgency);
+      result = result.filter((p) => normalizeUrgency(p.urgency) === selectedUrgency);
     }
 
     // Sort
@@ -192,10 +192,9 @@ export default function App() {
 
     return {
       all: baseList.length,
-      baixa: baseList.filter((p) => p.urgency === 'baixa').length,
-      media: baseList.filter((p) => !p.urgency || p.urgency === 'media').length,
-      alta: baseList.filter((p) => p.urgency === 'alta').length,
-      urgente: baseList.filter((p) => p.urgency === 'urgente').length,
+      novo: baseList.filter((p) => normalizeUrgency(p.urgency) === 'novo').length,
+      normal: baseList.filter((p) => normalizeUrgency(p.urgency) === 'normal').length,
+      urgente: baseList.filter((p) => normalizeUrgency(p.urgency) === 'urgente').length,
     };
   }, [products, selectedUserId]);
 
@@ -244,7 +243,7 @@ export default function App() {
   const handleReincludeProduct = async (
     product: Product,
     quantity = 1,
-    urgency: 'alta' | 'media' | 'baixa' | 'urgente' = 'alta'
+    urgency: ProductUrgency = 'normal'
   ) => {
     try {
       await updateProduct(product.id, {

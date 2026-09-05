@@ -14,6 +14,14 @@ export interface AppUser {
 
 export type ProductStatus = 'em_falta' | 'baixo_estoque' | 'comprado';
 
+export type ProductUrgency = 'novo' | 'normal' | 'urgente';
+
+export function normalizeUrgency(urgency?: string): ProductUrgency {
+  if (urgency === 'novo' || urgency === 'baixa') return 'novo';
+  if (urgency === 'urgente' || urgency === 'alta') return 'urgente';
+  return 'normal';
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -25,9 +33,10 @@ export interface Product {
   responsibleInitial: string;
   responsibleColor: string;
   status: ProductStatus;
-  urgency: 'alta' | 'media' | 'baixa' | 'urgente';
+  urgency: ProductUrgency | 'alta' | 'media' | 'baixa';
   barcode?: string;
   notes?: string;
+  imageUrl?: string;
   createdAt: string; // ISO string
   updatedAt?: string;
 }
