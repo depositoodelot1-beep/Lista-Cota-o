@@ -11,9 +11,15 @@ import {
   Package,
   CheckCircle2,
   Search,
+  ScanBarcode,
+  Barcode,
+  Database,
+  ListPlus,
+  Sparkles,
 } from 'lucide-react';
 import { Product, AppUser } from '../types';
 import { capitalizeWords, normalizeSearchText } from '../utils/text';
+import { BarcodeScannerModal } from './BarcodeScannerModal';
 
 interface AddEditProductModalProps {
   isOpen: boolean;
@@ -24,6 +30,7 @@ interface AddEditProductModalProps {
   onSave: (data: Omit<Product, 'id'>, editId?: string) => Promise<void>;
   onOpenUserManager?: () => void;
   allProducts?: Product[];
+  initialBarcode?: string;
 }
 
 export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
@@ -35,6 +42,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
   onSave,
   onOpenUserManager,
   allProducts = [],
+  initialBarcode,
 }) => {
   const [name, setName] = useState('');
   const [brand, setBrand] = useState('');
@@ -43,9 +51,19 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
   const [responsibleId, setResponsibleId] = useState(currentUser.id);
   const [urgency, setUrgency] = useState<'baixa' | 'media' | 'alta' | 'urgente'>('media');
   const [notes, setNotes] = useState('');
+  const [barcode, setBarcode] = useState('');
+  const [saveDestination, setSaveDestination] = useState<'both' | 'database_only'>('both');
   const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Barcode scanner state
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [barcodeScanNotification, setBarcodeScanNotification] = useState<{
+    type: 'found' | 'new';
+    code: string;
+    productName?: string;
+  } | null>(null);
 
   // Suggestions state
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -61,9 +79,11 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
       setUnit(productToEdit.unit || 'unidade');
       setResponsibleId(productToEdit.responsibleId || currentUser.id);
       setUrgency(productToEdit.urgency || 'media');
+      setBarcode(productToEdit.barcode || '');
       setNotes(productToEdit.notes || '');
       setSelectedDatabaseProduct(productToEdit);
-      if (productToEdit.brand || productToEdit.notes) {
+      setSaveDestination('both');
+      if (productToEdit.brand || productToEdit.notes || productToEdit.barcode) {
         setShowMoreDetails(true);
       }
     } else {
@@ -73,13 +93,23 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
       setUnit('unidade');
       setResponsibleId(currentUser.id);
       setUrgency('media'); // 'Normal' selected by default like in screenshot
+      setBarcode(initialBarcode || '');
       setNotes('');
-      setShowMoreDetails(false);
+      setSaveDestination('both');
+      setShowMoreDetails(Boolean(initialBarcode));
       setSelectedDatabaseProduct(null);
+      if (initialBarcode) {
+        setBarcodeScanNotification({
+          type: 'new',
+          code: initialBarcode,
+        });
+      } else {
+        setBarcodeScanNotification(null);
+      }
     }
     setIsDropdownOpen(false);
     setError(null);
-  }, [productToEdit, currentUser, isOpen]);
+  }, [productToEdit, currentUser, isOpen, initialBarcode]);
 
   // Click outside to close dropdown
   useEffect(() => {
@@ -105,7 +135,8 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
       if (productToEdit && p.id === productToEdit.id) return false;
       const nameNorm = normalizeSearchText(p.name);
       const brandNorm = normalizeSearchText(p.brand || '');
-      return nameNorm.includes(term) || brandNorm.includes(term);
+      const barcodeNorm = p.barcode ? normalizeSearchText(p.barcode) : '';
+      return nameNorm.includes(term) || brandNorm.includes(term) || barcodeNorm.includes(term);
     });
 
     // Sort: items that start with term first, then alphabetical
@@ -131,8 +162,9 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
       setQuantity(1);
     }
     if (prod.urgency) setUrgency(prod.urgency);
+    if (prod.barcode) setBarcode(prod.barcode);
     if (prod.notes) setNotes(prod.notes);
-    if (prod.brand || prod.notes) {
+    if (prod.brand || prod.notes || prod.barcode) {
       setShowMoreDetails(true);
     }
     setSelectedDatabaseProduct(prod);
@@ -140,10 +172,52 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
     setError(null);
   };
 
+  const handleBarcodeDetected = (code: string) => {
+    const cleanCode = code.trim();
+    if (!cleanCode) return;
+
+    setBarcode(cleanCode);
+
+    // Search in allProducts by barcode or notes
+    const foundByBarcode = allProducts.find(
+      (p) =>
+        (p.barcode && p.barcode.trim().toLowerCase() === cleanCode.toLowerCase()) ||
+        (p.notes && p.notes.includes(cleanCode))
+    );
+
+    if (foundByBarcode) {
+      handleSelectProduct(foundByBarcode);
+      setBarcodeScanNotification({
+        type: 'found',
+        code: cleanCode,
+        productName: foundByBarcode.name,
+      });
+    } else {
+      const foundByName = allProducts.find(
+        (p) => normalizeSearchText(p.name).includes(normalizeSearchText(cleanCode))
+      );
+      if (foundByName) {
+        handleSelectProduct(foundByName);
+        setBarcodeScanNotification({
+          type: 'found',
+          code: cleanCode,
+          productName: foundByName.name,
+        });
+      } else {
+        setSelectedDatabaseProduct(null);
+        setSaveDestination('both');
+        setBarcodeScanNotification({
+          type: 'new',
+          code: cleanCode,
+        });
+        setShowMoreDetails(true);
+      }
+    }
+  };
+
   if (!isOpen) return null;
 
   const selectedResponsible = users.find((u) => u.id === responsibleId) || currentUser;
-  const isSelf = selectedResponsible.id === currentUser.id;
 
   const handleIncrement = () => {
     setQuantity((prev) => {
@@ -176,21 +250,26 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
     setError(null);
 
     try {
+      const isDatabaseOnly = !productToEdit && !selectedDatabaseProduct && saveDestination === 'database_only';
+
       const productData: Omit<Product, 'id'> = {
         name: name.trim(),
-        quantity: qtyNum,
+        quantity: isDatabaseOnly ? (qtyNum > 0 ? qtyNum : 1) : qtyNum,
         unit: unit || 'unidade',
         responsibleId: selectedResponsible.id,
         responsibleName: selectedResponsible.name,
         responsibleInitial: selectedResponsible.avatarInitial || selectedResponsible.name[0].toUpperCase(),
         responsibleColor: selectedResponsible.avatarColor || '#3b82f6',
-        status: qtyNum === 0 ? 'em_falta' : 'baixo_estoque',
+        status: isDatabaseOnly ? 'comprado' : qtyNum === 0 ? 'em_falta' : 'baixo_estoque',
         urgency,
         createdAt: productToEdit ? productToEdit.createdAt : new Date().toISOString(),
       };
 
       if (brand.trim()) {
         productData.brand = brand.trim();
+      }
+      if (barcode.trim()) {
+        productData.barcode = barcode.trim();
       }
       if (notes.trim()) {
         productData.notes = notes.trim();
@@ -318,38 +397,34 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
                 <Plus className="w-4 h-4" />
               </button>
             </div>
-
-            {/* Selected User Info Pill matching Screenshot */}
-            <div className="mt-2 flex items-center gap-2 px-3 py-2 bg-slate-50/80 rounded-xl border border-slate-100">
-              <div
-                className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black text-white shrink-0"
-                style={{ backgroundColor: selectedResponsible.avatarColor || '#2563eb' }}
-              >
-                {selectedResponsible.avatarInitial || selectedResponsible.name.charAt(0).toUpperCase()}
-              </div>
-              <span className="text-xs text-slate-500 font-medium">
-                Responsável:{' '}
-                <strong className="text-blue-600 font-semibold">
-                  {isSelf ? 'Eu' : selectedResponsible.name}
-                </strong>
-              </span>
-            </div>
           </div>
 
-          {/* 2. NOME DO PRODUTO com busca em tempo real na base de dados */}
+          {/* 2. NOME DO PRODUTO com busca em tempo real na base de dados e Leitor de Código de Barras */}
           <div className="relative" ref={dropdownRef}>
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center justify-between mb-1.5 gap-2">
               <label
                 htmlFor="input-modal-product-name"
-                className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider"
+                className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate"
               >
                 2. NOME DO PRODUTO
               </label>
-              {matchingProducts.length > 0 && !selectedDatabaseProduct && (
-                <span className="text-[10px] text-blue-600 font-semibold">
-                  {matchingProducts.length} na base de dados
-                </span>
-              )}
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                {matchingProducts.length > 0 && !selectedDatabaseProduct && (
+                  <span className="text-[10px] text-blue-600 font-semibold mr-0.5">
+                    {matchingProducts.length} na base
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setIsScannerOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-700 text-xs font-bold border border-blue-200/80 transition-all cursor-pointer shadow-2xs"
+                  title="Abrir leitor de código de barras pela câmera ou leitor USB"
+                >
+                  <ScanBarcode className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Código de Barras</span>
+                </button>
+              </div>
             </div>
 
             <div className="relative">
@@ -373,15 +448,24 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
                     setIsDropdownOpen(true);
                   }
                 }}
-                placeholder="Nome do produto"
+                placeholder="Nome do produto ou código de barras"
                 autoCapitalize="words"
                 autoComplete="off"
                 required
                 autoFocus
-                className="w-full pl-4 pr-10 py-3 bg-white border border-blue-200/90 rounded-2xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs"
+                className="w-full pl-4 pr-16 py-3 bg-white border border-blue-200/90 rounded-2xl text-sm text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs"
               />
 
-              <div className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none flex items-center">
+              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setIsScannerOpen(true)}
+                  className="p-1 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                  title="Escanear com a câmera"
+                  aria-label="Abrir leitor de código de barras"
+                >
+                  <Barcode className="w-4 h-4" />
+                </button>
                 {selectedDatabaseProduct ? (
                   <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 ) : (
@@ -389,6 +473,98 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
                 )}
               </div>
             </div>
+
+            {/* Feedback do leitor de código de barras */}
+            {barcodeScanNotification && (
+              <div
+                className={`mt-2.5 p-3 rounded-2xl border text-xs animate-in fade-in duration-150 ${
+                  barcodeScanNotification.type === 'found'
+                    ? 'bg-emerald-50/90 border-emerald-200 text-emerald-900'
+                    : 'bg-blue-50/90 border-blue-200 text-blue-950'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2 min-w-0">
+                    {barcodeScanNotification.type === 'found' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <ScanBarcode className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-bold text-[11px] truncate">
+                        {barcodeScanNotification.type === 'found'
+                          ? `Produto encontrado pelo código ${barcodeScanNotification.code}!`
+                          : `Código ${barcodeScanNotification.code} lido com sucesso!`}
+                      </p>
+                      <p
+                        className={`text-[10px] mt-0.5 ${
+                          barcodeScanNotification.type === 'found'
+                            ? 'text-emerald-700'
+                            : 'text-blue-700'
+                        }`}
+                      >
+                        {barcodeScanNotification.type === 'found'
+                          ? `"${barcodeScanNotification.productName}" foi selecionado da base.`
+                          : 'Produto novo (não cadastrado). Você pode salvá-lo na Lista e na Base de Dados:'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setBarcodeScanNotification(null)}
+                    className="text-[10px] font-bold shrink-0 px-1.5 py-0.5 rounded-md opacity-70 hover:opacity-100 transition-opacity cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {barcodeScanNotification.type === 'new' && (
+                  <div className="mt-2.5 pt-2 border-t border-blue-200/70 grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setSaveDestination('both')}
+                      className={`p-1.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        saveDestination === 'both'
+                          ? 'bg-white border-blue-600 ring-1 ring-blue-500 shadow-2xs'
+                          : 'bg-white/60 border-blue-200/60 hover:bg-white text-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-800 flex items-center gap-1">
+                          <ListPlus className="w-3 h-3 text-blue-600" />
+                          <span>Lista e Base</span>
+                        </span>
+                        {saveDestination === 'both' && <Check className="w-3 h-3 text-blue-600 stroke-[3]" />}
+                      </div>
+                      <p className="text-[9px] text-slate-500 mt-0.5 leading-tight">
+                        Adiciona à lista e grava na base de dados
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setSaveDestination('database_only')}
+                      className={`p-1.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        saveDestination === 'database_only'
+                          ? 'bg-white border-blue-600 ring-1 ring-blue-500 shadow-2xs'
+                          : 'bg-white/60 border-blue-200/60 hover:bg-white text-slate-600'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold text-slate-800 flex items-center gap-1">
+                          <Database className="w-3 h-3 text-emerald-600" />
+                          <span>Só na Base</span>
+                        </span>
+                        {saveDestination === 'database_only' && <Check className="w-3 h-3 text-blue-600 stroke-[3]" />}
+                      </div>
+                      <p className="text-[9px] text-slate-500 mt-0.5 leading-tight">
+                        Grava no catálogo sem entrar na lista agora
+                      </p>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Dropdown de sugestões da base de dados */}
             {isDropdownOpen && matchingProducts.length > 0 && (
@@ -636,9 +812,42 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
             </button>
 
             {showMoreDetails && (
-              <div className="space-y-2 mt-2 pt-2 border-t border-slate-100 animate-in fade-in duration-150">
+              <div className="space-y-2.5 mt-2 pt-2 border-t border-slate-100 animate-in fade-in duration-150">
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <label
+                      htmlFor="input-modal-barcode"
+                      className="block text-[10px] font-bold text-slate-500 uppercase"
+                    >
+                      Código de Barras (EAN / UPC)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setIsScannerOpen(true)}
+                      className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
+                    >
+                      <ScanBarcode className="w-3 h-3" />
+                      <span>Escanear câmera</span>
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <input
+                      id="input-modal-barcode"
+                      type="text"
+                      value={barcode}
+                      onChange={(e) => setBarcode(e.target.value)}
+                      placeholder="Ex: 7891000100103"
+                      className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-hidden focus:border-blue-500"
+                    />
+                    <Barcode className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="input-modal-brand"
+                    className="block text-[10px] font-bold text-slate-500 uppercase mb-1"
+                  >
                     Marca / Fabricante
                   </label>
                   <input
@@ -653,10 +862,14 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
+                  <label
+                    htmlFor="input-modal-notes"
+                    className="block text-[10px] font-bold text-slate-500 uppercase mb-1"
+                  >
                     Observação
                   </label>
                   <input
+                    id="input-modal-notes"
                     type="text"
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
@@ -667,6 +880,48 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
               </div>
             )}
           </div>
+
+          {/* Onde Salvar este Produto (quando for novo ou editando destino) */}
+          {!productToEdit && !selectedDatabaseProduct && (
+            <div className="p-2.5 bg-slate-50/80 rounded-2xl border border-slate-200/90 space-y-1.5">
+              <div className="flex items-center justify-between px-0.5">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Database className="w-3 h-3 text-slate-400" />
+                  <span>Onde salvar este produto:</span>
+                </span>
+                <span className="text-[10px] font-semibold text-blue-600">
+                  {saveDestination === 'both' ? 'Lista + Base de Dados' : 'Apenas Base de Dados'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSaveDestination('both')}
+                  className={`py-2 px-2.5 rounded-xl border text-center transition-all cursor-pointer text-xs font-bold flex items-center justify-center gap-1.5 ${
+                    saveDestination === 'both'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <ListPlus className="w-3.5 h-3.5" />
+                  <span>Lista e Base de Dados</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSaveDestination('database_only')}
+                  className={`py-2 px-2.5 rounded-xl border text-center transition-all cursor-pointer text-xs font-bold flex items-center justify-center gap-1.5 ${
+                    saveDestination === 'database_only'
+                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  <Database className="w-3.5 h-3.5" />
+                  <span>Só na Base de Dados</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Submit Button matching Screenshot */}
           <div className="pt-2">
@@ -682,12 +937,25 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
                   ? 'Salvando...'
                   : productToEdit
                   ? 'Salvar Alterações'
-                  : 'Adicionar à Lista'}
+                  : selectedDatabaseProduct
+                  ? selectedDatabaseProduct.status === 'comprado'
+                    ? 'Reincluir na Lista de Compras'
+                    : 'Atualizar na Lista e Base'
+                  : saveDestination === 'database_only'
+                  ? 'Salvar apenas na Base de Dados'
+                  : 'Salvar na Lista e na Base de Dados'}
               </span>
             </button>
           </div>
         </form>
       </div>
+
+      {/* Barcode Scanner Modal with Camera and Manual Input */}
+      <BarcodeScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onDetected={handleBarcodeDetected}
+      />
     </div>
   );
 };

@@ -14,9 +14,11 @@ import {
   ListPlus,
   Check,
   Filter,
+  ScanBarcode,
 } from 'lucide-react';
 import { Product, AppUser } from '../types';
-import { capitalizeWords } from '../utils/text';
+import { capitalizeWords, normalizeSearchText } from '../utils/text';
+import { BarcodeScannerModal } from './BarcodeScannerModal';
 
 interface ProductCatalogModalProps {
   isOpen: boolean;
@@ -31,6 +33,7 @@ interface ProductCatalogModalProps {
   onEditProduct: (product: Product) => void;
   onDeleteProduct: (product: Product) => void;
   onAddNewProduct: () => void;
+  onAddNewProductWithBarcode?: (barcode: string) => void;
 }
 
 export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
@@ -42,6 +45,7 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
   onEditProduct,
   onDeleteProduct,
   onAddNewProduct,
+  onAddNewProductWithBarcode,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [catalogFilter, setCatalogFilter] = useState<'all' | 'in_list' | 'bought'>('all');
@@ -51,6 +55,41 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
   const [reincludeQty, setReincludeQty] = useState<number>(1);
   const [reincludeUrgency, setReincludeUrgency] = useState<'alta' | 'media' | 'baixa' | 'urgente'>('alta');
   const [submittingId, setSubmittingId] = useState<string | null>(null);
+
+  // Barcode scanner state in Database Catalog
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [barcodeSearchFeedback, setBarcodeSearchFeedback] = useState<{
+    code: string;
+    found: boolean;
+    productName?: string;
+  } | null>(null);
+
+  const handleBarcodeDetected = (code: string) => {
+    const clean = code.trim();
+    if (!clean) return;
+    setSearchTerm(clean);
+    setCatalogFilter('all');
+
+    const cleanNorm = normalizeSearchText(clean);
+    const found = products.find(
+      (p) =>
+        (p.barcode && normalizeSearchText(p.barcode) === cleanNorm) ||
+        normalizeSearchText(p.name).includes(cleanNorm)
+    );
+
+    if (found) {
+      setBarcodeSearchFeedback({
+        code: clean,
+        found: true,
+        productName: found.name,
+      });
+    } else {
+      setBarcodeSearchFeedback({
+        code: clean,
+        found: false,
+      });
+    }
+  };
 
   // Filter products for catalog
   const filteredProducts = useMemo(() => {
@@ -63,6 +102,7 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
         (p) =>
           (p.name && p.name.toLowerCase().includes(term)) ||
           (p.brand && p.brand.toLowerCase().includes(term)) ||
+          (p.barcode && p.barcode.toLowerCase().includes(term)) ||
           (p.responsibleName && p.responsibleName.toLowerCase().includes(term)) ||
           (p.notes && p.notes.toLowerCase().includes(term))
       );
@@ -158,31 +198,108 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
 
         {/* Search & Filter Bar */}
         <div className="p-4 border-b border-slate-100 space-y-3 bg-white shrink-0">
-          {/* Search Input */}
+          {/* Search Input with Barcode Scanner Icon */}
           <div className="relative">
             <input
               id="catalog-search-input"
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(capitalizeWords(e.target.value))}
-              placeholder="Pesquisar produto ou marca na base..."
+              onChange={(e) => {
+                setSearchTerm(capitalizeWords(e.target.value));
+                if (barcodeSearchFeedback) setBarcodeSearchFeedback(null);
+              }}
+              placeholder="Pesquisar produto, marca ou código de barras..."
               autoCapitalize="words"
               autoComplete="off"
-              className="w-full bg-slate-100 border-none rounded-xl py-2.5 pl-10 pr-9 text-sm text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:outline-hidden transition-all"
+              className="w-full bg-slate-100 border-none rounded-xl py-2.5 pl-10 pr-20 text-sm text-slate-800 placeholder:text-slate-400 focus:ring-2 focus:ring-blue-500 focus:outline-hidden transition-all"
             />
             <div className="absolute left-3.5 top-3 text-slate-400">
               <Search className="w-4 h-4" />
             </div>
-            {searchTerm && (
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm('');
+                    setBarcodeSearchFeedback(null);
+                  }}
+                  className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer transition-colors"
+                  title="Limpar pesquisa"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
               <button
+                id="btn-search-barcode-catalog"
                 type="button"
-                onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-2.5 p-1 text-slate-400 hover:text-slate-600 rounded-full"
+                onClick={() => setIsScannerOpen(true)}
+                className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-100/70 rounded-lg cursor-pointer transition-colors flex items-center justify-center"
+                title="Buscar por código de barras na base de dados"
+                aria-label="Buscar por código de barras na base de dados"
               >
-                <X className="w-4 h-4" />
+                <ScanBarcode className="w-4 h-4" />
               </button>
-            )}
+            </div>
           </div>
+
+          {/* Feedback de leitura de código de barras na base */}
+          {barcodeSearchFeedback && (
+            <div
+              className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs animate-in fade-in duration-150 ${
+                barcodeSearchFeedback.found
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                  : 'bg-amber-50 border-amber-200 text-amber-900'
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                {barcodeSearchFeedback.found ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <AlertOctagon className="w-4 h-4 text-amber-600 shrink-0" />
+                )}
+                <div className="min-w-0">
+                  <p className="font-bold text-[11px] truncate">
+                    {barcodeSearchFeedback.found
+                      ? `Produto "${barcodeSearchFeedback.productName}" localizado na base!`
+                      : `Código ${barcodeSearchFeedback.code} não cadastrado na base.`}
+                  </p>
+                  <p className="text-[10px] opacity-85">
+                    {barcodeSearchFeedback.found
+                      ? `Código de barras: ${barcodeSearchFeedback.code}`
+                      : 'Deseja cadastrar este produto na base de dados agora?'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
+                {!barcodeSearchFeedback.found && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const code = barcodeSearchFeedback.code;
+                      setBarcodeSearchFeedback(null);
+                      if (onAddNewProductWithBarcode) {
+                        onAddNewProductWithBarcode(code);
+                      } else {
+                        onAddNewProduct();
+                      }
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors cursor-pointer"
+                  >
+                    Cadastrar
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setBarcodeSearchFeedback(null)}
+                  className="p-1 rounded-md opacity-60 hover:opacity-100 transition-opacity cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Filter Chips */}
           <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
@@ -499,6 +616,13 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Leitor de código de barras para busca na base */}
+      <BarcodeScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onDetected={handleBarcodeDetected}
+      />
     </div>
   );
 };

@@ -26,6 +26,7 @@ export interface Product {
   responsibleColor: string;
   status: ProductStatus;
   urgency: 'alta' | 'media' | 'baixa' | 'urgente';
+  barcode?: string;
   notes?: string;
   createdAt: string; // ISO string
   updatedAt?: string;

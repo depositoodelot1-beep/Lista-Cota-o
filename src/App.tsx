@@ -24,7 +24,8 @@ import { BottomNav } from './components/BottomNav';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { ProductCatalogModal } from './components/ProductCatalogModal';
-import { ShoppingBag, Plus, RefreshCw, AlertCircle, CheckCheck, Package } from 'lucide-react';
+import { BarcodeScannerModal } from './components/BarcodeScannerModal';
+import { ShoppingBag, Plus, RefreshCw, AlertCircle, CheckCheck, Package, CheckCircle2, ScanBarcode } from 'lucide-react';
 import { normalizeSearchText } from './utils/text';
 
 export default function App() {
@@ -45,6 +46,15 @@ export default function App() {
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  // Barcode search on list state
+  const [isListBarcodeScannerOpen, setIsListBarcodeScannerOpen] = useState(false);
+  const [initialBarcodeForNew, setInitialBarcodeForNew] = useState<string>('');
+  const [listBarcodeScanFeedback, setListBarcodeScanFeedback] = useState<{
+    code: string;
+    status: 'found_in_list' | 'found_in_db_bought' | 'not_found';
+    product?: Product;
+  } | null>(null);
 
   // Modals
   const [isAddEditOpen, setIsAddEditOpen] = useState(false);
@@ -139,8 +149,14 @@ export default function App() {
       result = result.filter((p) => {
         const nameNorm = normalizeSearchText(p.name);
         const brandNorm = normalizeSearchText(p.brand || '');
+        const barcodeNorm = p.barcode ? normalizeSearchText(p.barcode) : '';
         const respNorm = normalizeSearchText(p.responsibleName || '');
-        return nameNorm.includes(term) || brandNorm.includes(term) || respNorm.includes(term);
+        return (
+          nameNorm.includes(term) ||
+          brandNorm.includes(term) ||
+          barcodeNorm.includes(term) ||
+          respNorm.includes(term)
+        );
       });
     }
 
@@ -242,6 +258,50 @@ export default function App() {
     }
   };
 
+  // Barcode detection on shopping list search
+  const handleBarcodeDetectedInList = (code: string) => {
+    const cleanCode = code.trim();
+    if (!cleanCode) return;
+    setSearchTerm(cleanCode);
+
+    const cleanNorm = normalizeSearchText(cleanCode);
+    const found = products.find(
+      (p) =>
+        (p.barcode && normalizeSearchText(p.barcode) === cleanNorm) ||
+        normalizeSearchText(p.name).includes(cleanNorm)
+    );
+
+    if (found) {
+      if (found.status !== 'comprado') {
+        setListBarcodeScanFeedback({
+          code: cleanCode,
+          status: 'found_in_list',
+          product: found,
+        });
+        addToast('Produto localizado na lista!', `"${found.name}" encontrado pelo código de barras.`);
+      } else {
+        setListBarcodeScanFeedback({
+          code: cleanCode,
+          status: 'found_in_db_bought',
+          product: found,
+        });
+        addToast('Produto encontrado na base!', `"${found.name}" está no catálogo arquivado.`, 'info');
+      }
+    } else {
+      setListBarcodeScanFeedback({
+        code: cleanCode,
+        status: 'not_found',
+      });
+      addToast('Código não cadastrado', `O código ${cleanCode} não foi encontrado na base de dados.`, 'info');
+    }
+  };
+
+  const handleOpenAddWithBarcode = (barcode: string) => {
+    setEditingProduct(null);
+    setInitialBarcodeForNew(barcode);
+    setIsAddEditOpen(true);
+  };
+
   // Counts
   const outOfStockCount = useMemo(() => {
     return products.filter((p) => p.quantity === 0 || p.status === 'em_falta').length;
@@ -273,7 +333,19 @@ export default function App() {
       );
     } else {
       await addProduct(productData);
-      addToast('Novo produto adicionado à lista!');
+      if (productData.status === 'comprado') {
+        addToast(
+          productData.barcode
+            ? `"${productData.name}" cadastrado na base de dados com código ${productData.barcode}!`
+            : `"${productData.name}" cadastrado na base de dados com sucesso!`
+        );
+      } else {
+        addToast(
+          productData.barcode
+            ? `"${productData.name}" salvo na Lista de Compras e gravado na Base de Dados!`
+            : `"${productData.name}" adicionado à lista e gravado na base!`
+        );
+      }
     }
   };
 
@@ -403,13 +475,119 @@ export default function App() {
             onOpenCatalog={() => setIsCatalogOpen(true)}
           />
 
-          {/* Filtro de Busca na Lista de Compras */}
+          {/* Filtro de Busca na Lista de Compras com leitor de código de barras */}
           <SearchAndFilters
             searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
+            onSearchChange={(val) => {
+              setSearchTerm(val);
+              if (listBarcodeScanFeedback) setListBarcodeScanFeedback(null);
+            }}
+            onOpenBarcodeScanner={() => setIsListBarcodeScannerOpen(true)}
             resultCount={filteredProducts.length}
-            placeholder="Pesquisar produto ou marca na lista..."
+            placeholder="Pesquisar produto, marca ou código de barras..."
           />
+
+          {/* Banner de resultado da leitura de código de barras na lista */}
+          {listBarcodeScanFeedback && (
+            <div className="px-4 sm:px-5 py-2 bg-white border-b border-slate-100">
+              {listBarcodeScanFeedback.status === 'found_in_list' && (
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-center justify-between gap-2 text-xs animate-in fade-in">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-bold text-[11px] truncate">
+                        Produto "{listBarcodeScanFeedback.product?.name}" localizado na lista!
+                      </p>
+                      <p className="text-[10px] text-emerald-700 truncate">
+                        Código: {listBarcodeScanFeedback.code} • Quantidade: {listBarcodeScanFeedback.product?.quantity} {listBarcodeScanFeedback.product?.unit}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setListBarcodeScanFeedback(null)}
+                    className="p-1 rounded-md text-emerald-700 hover:text-emerald-950 cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {listBarcodeScanFeedback.status === 'found_in_db_bought' && (
+                <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 flex items-center justify-between gap-2 text-xs animate-in fade-in">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Package className="w-4 h-4 text-blue-600 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-bold text-[11px] truncate">
+                        Produto "{listBarcodeScanFeedback.product?.name}" encontrado na base de dados!
+                      </p>
+                      <p className="text-[10px] text-blue-700">
+                        Este item está arquivado no catálogo. Deseja reincluir na lista?
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (listBarcodeScanFeedback.product) {
+                          await handleReincludeProduct(listBarcodeScanFeedback.product);
+                          setListBarcodeScanFeedback(null);
+                          setSearchTerm('');
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors cursor-pointer"
+                    >
+                      Reincluir
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setListBarcodeScanFeedback(null)}
+                      className="p-1 rounded-md text-blue-700 hover:text-blue-950 cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {listBarcodeScanFeedback.status === 'not_found' && (
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 flex items-center justify-between gap-2 text-xs animate-in fade-in">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="font-bold text-[11px] truncate">
+                        Código {listBarcodeScanFeedback.code} não cadastrado na base.
+                      </p>
+                      <p className="text-[10px] text-amber-700">
+                        Deseja cadastrar na lista e na base agora?
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const code = listBarcodeScanFeedback.code;
+                        setListBarcodeScanFeedback(null);
+                        handleOpenAddWithBarcode(code);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold transition-colors cursor-pointer"
+                    >
+                      Cadastrar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setListBarcodeScanFeedback(null)}
+                      className="p-1 rounded-md text-amber-700 hover:text-amber-950 cursor-pointer"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Filtro por Prioridade */}
           <PriorityFilter
@@ -683,9 +861,11 @@ export default function App() {
         users={users}
         currentUser={currentUser}
         allProducts={products}
+        initialBarcode={initialBarcodeForNew}
         onClose={() => {
           setIsAddEditOpen(false);
           setEditingProduct(null);
+          setInitialBarcodeForNew('');
           setActiveNavTab('list');
         }}
         onSave={handleSaveProduct}
@@ -735,8 +915,17 @@ export default function App() {
         onDeleteProduct={handleDeleteProductRequest}
         onAddNewProduct={() => {
           setEditingProduct(null);
+          setInitialBarcodeForNew('');
           setIsAddEditOpen(true);
         }}
+        onAddNewProductWithBarcode={handleOpenAddWithBarcode}
+      />
+
+      {/* Leitor de código de barras para busca na lista de compras */}
+      <BarcodeScannerModal
+        isOpen={isListBarcodeScannerOpen}
+        onClose={() => setIsListBarcodeScannerOpen(false)}
+        onDetected={handleBarcodeDetectedInList}
       />
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MoreVertical, Edit2, Trash2, CheckCircle2, Clock, AlertOctagon, User, Check } from 'lucide-react';
+import { MoreVertical, Edit2, Trash2, CheckCircle2, Clock, AlertOctagon, User, Check, Barcode } from 'lucide-react';
 import { Product, AppUser } from '../types';
 
 interface ProductCardProps {
@@ -189,6 +189,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 </span>
               )}
             </span>
+
+            {product.barcode && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-mono text-slate-500 bg-slate-100/90 px-1.5 py-0.5 rounded truncate max-w-[110px]"
+                title={`Código de barras: ${product.barcode}`}
+              >
+                <Barcode className="w-3 h-3 text-slate-400 shrink-0" />
+                <span className="truncate">{product.barcode}</span>
+              </span>
+            )}
           </div>
         </div>
       </div>
