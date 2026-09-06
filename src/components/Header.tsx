@@ -1,23 +1,27 @@
 import React from 'react';
-import { FileSpreadsheet, Settings, Package } from 'lucide-react';
+import { FileSpreadsheet, Settings, Package, Truck } from 'lucide-react';
 import { AppUser } from '../types';
 
 interface HeaderProps {
   toBuyCount: number;
   outOfStockCount: number;
   currentUser: AppUser;
+  supplierCount?: number;
   onOpenSheets: () => void;
   onOpenAdmin: () => void;
   onOpenCatalog: () => void;
+  onOpenSuppliers: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   toBuyCount,
   outOfStockCount,
   currentUser,
+  supplierCount,
   onOpenSheets,
   onOpenAdmin,
   onOpenCatalog,
+  onOpenSuppliers,
 }) => {
   return (
     <header id="app-header" className="bg-white px-5 pt-5 pb-3 border-b border-slate-100 shadow-xs z-10">
@@ -84,6 +88,23 @@ export const Header: React.FC<HeaderProps> = ({
               <Package className="w-4 h-4" />
             </button>
 
+            {/* Fornecedores button imitating the header icon buttons */}
+            <button
+              id="btn-header-suppliers"
+              type="button"
+              onClick={onOpenSuppliers}
+              className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-colors cursor-pointer relative"
+              title="Fornecedores (Contatos, Telefone e E-mail)"
+              aria-label="Fornecedores"
+            >
+              <Truck className="w-4 h-4" />
+              {typeof supplierCount === 'number' && supplierCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 bg-blue-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center border border-white">
+                  {supplierCount > 9 ? '9+' : supplierCount}
+                </span>
+              )}
+            </button>
+
             {/* Admin button */}
             <button
               id="btn-header-admin"
@@ -101,3 +122,4 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+

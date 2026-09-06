@@ -43,3 +43,16 @@ export interface Product {
 
 export type SortField = 'name' | 'quantity' | 'date';
 export type SortDirection = 'asc' | 'desc';
+
+export interface Supplier {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  contactPerson?: string;
+  category?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+

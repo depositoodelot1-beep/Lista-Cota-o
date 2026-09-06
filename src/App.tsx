@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   subscribeToProducts,
   subscribeToUsers,
+  subscribeToSuppliers,
   initializeDefaultData,
   addProduct,
   updateProduct,
@@ -9,9 +10,13 @@ import {
   createUser,
   updateUser,
   deleteUser,
+  addSupplier,
+  updateSupplier,
+  deleteSupplier,
   DEFAULT_USERS,
+  DEFAULT_SUPPLIERS,
 } from './services/db';
-import { Product, AppUser, ProductStatus, SortField, SortDirection, ProductUrgency, normalizeUrgency } from './types';
+import { Product, AppUser, Supplier, ProductStatus, SortField, SortDirection, ProductUrgency, normalizeUrgency } from './types';
 import { Header } from './components/Header';
 import { ResponsibleFilter } from './components/ResponsibleFilter';
 import { ProductCard } from './components/ProductCard';
@@ -25,6 +30,7 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { ProductCatalogModal } from './components/ProductCatalogModal';
 import { BarcodeScannerModal } from './components/BarcodeScannerModal';
+import { SuppliersModal } from './components/SuppliersModal';
 import { ShoppingBag, Plus, RefreshCw, AlertCircle, CheckCheck, Package, CheckCircle2, ScanBarcode } from 'lucide-react';
 import { normalizeSearchText } from './utils/text';
 
@@ -62,6 +68,8 @@ export default function App() {
   const [isSheetsOpen, setIsSheetsOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
+  const [isSuppliersOpen, setIsSuppliersOpen] = useState(false);
+  const [suppliers, setSuppliers] = useState<Supplier[]>(DEFAULT_SUPPLIERS);
   const [activeNavTab, setActiveNavTab] = useState<'list' | 'add' | 'sheets' | 'admin'>('list');
 
   // Multi-selection (Master Checkbox)
@@ -99,6 +107,7 @@ export default function App() {
   useEffect(() => {
     let unsubscribeProducts: () => void = () => {};
     let unsubscribeUsers: () => void = () => {};
+    let unsubscribeSuppliers: () => void = () => {};
 
     const startApp = async () => {
       try {
@@ -111,6 +120,10 @@ export default function App() {
             const match = allUsers.find((u) => u.id === prev.id);
             return match || allUsers[0] || prev;
           });
+        });
+
+        unsubscribeSuppliers = subscribeToSuppliers((allSuppliers) => {
+          setSuppliers(allSuppliers);
         });
 
         unsubscribeProducts = subscribeToProducts((allProds) => {
@@ -128,6 +141,7 @@ export default function App() {
     return () => {
       unsubscribeProducts();
       unsubscribeUsers();
+      unsubscribeSuppliers();
     };
   }, []);
 
@@ -389,6 +403,19 @@ export default function App() {
     });
   };
 
+  // Fornecedores handlers
+  const handleAddSupplier = async (supplierData: Omit<Supplier, 'id'>) => {
+    await addSupplier(supplierData);
+  };
+
+  const handleUpdateSupplier = async (id: string, updates: Partial<Supplier>) => {
+    await updateSupplier(id, updates);
+  };
+
+  const handleDeleteSupplier = async (id: string) => {
+    await deleteSupplier(id);
+  };
+
   const handleAdminLogin = async (username: string, pass: string): Promise<boolean> => {
     // Find admin user in database
     const adminUser = users.find(
@@ -469,9 +496,11 @@ export default function App() {
             toBuyCount={toBuyCount}
             outOfStockCount={outOfStockCount}
             currentUser={currentUser}
+            supplierCount={suppliers.length}
             onOpenSheets={() => setIsSheetsOpen(true)}
             onOpenAdmin={() => setIsAdminOpen(true)}
             onOpenCatalog={() => setIsCatalogOpen(true)}
+            onOpenSuppliers={() => setIsSuppliersOpen(true)}
           />
 
           {/* Filtro de Busca na Lista de Compras com leitor de código de barras */}
@@ -925,6 +954,17 @@ export default function App() {
         isOpen={isListBarcodeScannerOpen}
         onClose={() => setIsListBarcodeScannerOpen(false)}
         onDetected={handleBarcodeDetectedInList}
+      />
+
+      {/* Fornecedores Modal */}
+      <SuppliersModal
+        isOpen={isSuppliersOpen}
+        suppliers={suppliers}
+        onClose={() => setIsSuppliersOpen(false)}
+        onAddSupplier={handleAddSupplier}
+        onUpdateSupplier={handleUpdateSupplier}
+        onDeleteSupplier={handleDeleteSupplier}
+        onToast={addToast}
       />
     </div>
   );

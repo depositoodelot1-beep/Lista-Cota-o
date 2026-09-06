@@ -12,10 +12,45 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Product, AppUser } from '../types';
+import { Product, AppUser, Supplier } from '../types';
 
 const PRODUCTS_COLLECTION = 'products';
 const USERS_COLLECTION = 'app_users';
+const SUPPLIERS_COLLECTION = 'suppliers';
+
+export const DEFAULT_SUPPLIERS: Supplier[] = [
+  {
+    id: 'supp-tigre',
+    name: 'Tigre Tubos e Conexões',
+    phone: '(11) 98765-4321',
+    email: 'vendas@tigre.com.br',
+    contactPerson: 'Rogério (Representante Comercial)',
+    category: 'Hidráulica',
+    notes: 'Entrega todas as terças e quintas. Pedido mínimo R$ 400,00.',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'supp-amanco',
+    name: 'Amanco Wavin Brasil',
+    phone: '(11) 97654-3210',
+    email: 'pedidos@amanco.com.br',
+    contactPerson: 'Juliana Pedidos',
+    category: 'Tubos e Conexões',
+    notes: 'Faturamento em 28 dias para pedidos acima de R$ 800,00.',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'supp-distribuidora',
+    name: 'Distribuidora Silva & Cia',
+    phone: '(11) 99123-4567',
+    email: 'contato@silvadistribuidora.com.br',
+    contactPerson: 'Carlos Silva',
+    category: 'Materiais Gerais',
+    notes: 'Entrega expressa no mesmo dia para pedidos até às 11h.',
+    createdAt: new Date().toISOString(),
+  },
+];
+
 
 export const DEFAULT_USERS: AppUser[] = [
   {
@@ -288,3 +323,93 @@ export async function deleteUser(id: string): Promise<void> {
   const ref = doc(db, USERS_COLLECTION, id);
   await deleteDoc(ref);
 }
+
+// ==================== SUPPLIERS (FORNECEDORES) ====================
+
+// Subscribe to suppliers real-time
+export function subscribeToSuppliers(
+  callback: (suppliers: Supplier[]) => void,
+  onError?: (error: Error) => void
+) {
+  try {
+    const q = query(collection(db, SUPPLIERS_COLLECTION), orderBy('createdAt', 'desc'));
+    return onSnapshot(
+      q,
+      async (snapshot) => {
+        if (snapshot.empty) {
+          // Initialize with default suppliers if collection is empty
+          try {
+            const batchPromises = DEFAULT_SUPPLIERS.map((supp) => {
+              const { id, ...data } = supp;
+              return setDoc(doc(db, SUPPLIERS_COLLECTION, id), cleanFirestorePayload({
+                ...data,
+                id,
+                createdAt: new Date().toISOString(),
+              }));
+            });
+            await Promise.all(batchPromises);
+          } catch (seedErr) {
+            console.warn('Could not seed initial suppliers:', seedErr);
+            callback(DEFAULT_SUPPLIERS);
+            return;
+          }
+        }
+
+        const suppliers: Supplier[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          suppliers.push({
+            id: docSnap.id,
+            name: data.name || '',
+            phone: data.phone || '',
+            email: data.email || '',
+            contactPerson: data.contactPerson || '',
+            category: data.category || '',
+            notes: data.notes || '',
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: data.updatedAt,
+          });
+        });
+
+        // Fallback if empty array
+        if (suppliers.length === 0) {
+          callback(DEFAULT_SUPPLIERS);
+        } else {
+          callback(suppliers);
+        }
+      },
+      (err) => {
+        console.error('Firestore suppliers subscription error:', err);
+        if (onError) onError(err);
+      }
+    );
+  } catch (error: any) {
+    if (onError) onError(error);
+    return () => {};
+  }
+}
+
+export async function addSupplier(supplier: Omit<Supplier, 'id'>): Promise<string> {
+  const payload = cleanFirestorePayload({
+    ...supplier,
+    createdAt: new Date().toISOString(),
+    serverTime: serverTimestamp(),
+  });
+  const docRef = await addDoc(collection(db, SUPPLIERS_COLLECTION), payload);
+  return docRef.id;
+}
+
+export async function updateSupplier(id: string, updates: Partial<Supplier>): Promise<void> {
+  const ref = doc(db, SUPPLIERS_COLLECTION, id);
+  const payload = cleanFirestorePayload({
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  });
+  await updateDoc(ref, payload);
+}
+
+export async function deleteSupplier(id: string): Promise<void> {
+  const ref = doc(db, SUPPLIERS_COLLECTION, id);
+  await deleteDoc(ref);
+}
+
