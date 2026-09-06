@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MoreVertical, Edit2, Trash2, CheckCircle2, Clock, AlertOctagon, User, Check, Barcode, ZoomIn, X, Camera } from 'lucide-react';
-import { Product, AppUser, normalizeUrgency } from '../types';
+import { Product, AppUser, SupplierQuote, normalizeUrgency } from '../types';
 import { updateProduct } from '../services/db';
 import { compressProductImage } from '../utils/image';
 
@@ -8,6 +8,8 @@ interface ProductCardProps {
   product: Product;
   currentUser: AppUser;
   isSelected?: boolean;
+  bestQuote?: SupplierQuote | null;
+  onOpenQuote?: (product: Product) => void;
   onToggleSelect?: (product: Product) => void;
   onEdit: (product: Product) => void;
   onDelete: (product: Product) => void;
@@ -18,6 +20,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   currentUser,
   isSelected = false,
+  bestQuote,
+  onOpenQuote,
   onToggleSelect,
   onEdit,
   onDelete,
@@ -276,6 +280,23 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                 <Barcode className="w-3 h-3 text-slate-400 shrink-0" />
                 <span className="truncate">{product.barcode}</span>
               </span>
+            )}
+
+            {/* Cotação Vencedora / Melhor Preço se houver */}
+            {bestQuote && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenQuote?.(product);
+                }}
+                className="inline-flex items-center gap-1 text-[10px] font-extrabold text-emerald-800 bg-emerald-100/80 hover:bg-emerald-200/80 border border-emerald-300 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+                title={`Melhor oferta: R$ ${bestQuote.price.toFixed(2)} por ${bestQuote.supplierName} (marca: ${bestQuote.brand}) - Toque para ver ou cotar`}
+              >
+                <span className="text-[10px]">🏆</span>
+                <span>R$ {bestQuote.price.toFixed(2).replace('.', ',')}</span>
+                <span className="text-emerald-700 font-medium">({bestQuote.supplierName})</span>
+              </button>
             )}
           </div>
         </div>

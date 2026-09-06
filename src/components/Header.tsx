@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileSpreadsheet, Settings, Package, Truck } from 'lucide-react';
+import { FileSpreadsheet, Settings, Package, Truck, Scale } from 'lucide-react';
 import { AppUser } from '../types';
 
 interface HeaderProps {
@@ -7,10 +7,12 @@ interface HeaderProps {
   outOfStockCount: number;
   currentUser: AppUser;
   supplierCount?: number;
+  quotesCount?: number;
   onOpenSheets: () => void;
   onOpenAdmin: () => void;
   onOpenCatalog: () => void;
   onOpenSuppliers: () => void;
+  onOpenQuotes?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -18,10 +20,12 @@ export const Header: React.FC<HeaderProps> = ({
   outOfStockCount,
   currentUser,
   supplierCount,
+  quotesCount,
   onOpenSheets,
   onOpenAdmin,
   onOpenCatalog,
   onOpenSuppliers,
+  onOpenQuotes,
 }) => {
   return (
     <header id="app-header" className="bg-white px-5 pt-5 pb-3 border-b border-slate-100 shadow-xs z-10">
@@ -64,6 +68,25 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Action icon buttons styled with Professional Polish slate-100 & rounded-xl */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* Cotações dos Fornecedores */}
+            {onOpenQuotes && (
+              <button
+                id="btn-header-quotes"
+                type="button"
+                onClick={onOpenQuotes}
+                className="w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 flex items-center justify-center transition-colors cursor-pointer relative"
+                title="Cotações de Fornecedores & Comparador de Preços"
+                aria-label="Cotações"
+              >
+                <Scale className="w-4 h-4" />
+                {typeof quotesCount === 'number' && quotesCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 bg-emerald-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center border border-white">
+                    {quotesCount > 9 ? '9+' : quotesCount}
+                  </span>
+                )}
+              </button>
+            )}
+
             {/* Green Google Sheets button */}
             <button
               id="btn-header-sheets"
@@ -88,7 +111,7 @@ export const Header: React.FC<HeaderProps> = ({
               <Package className="w-4 h-4" />
             </button>
 
-            {/* Fornecedores button imitating the header icon buttons */}
+            {/* Fornecedores button */}
             <button
               id="btn-header-suppliers"
               type="button"
@@ -122,4 +145,3 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
-

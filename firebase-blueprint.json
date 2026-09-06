@@ -1,0 +1,93 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Item in shopping list or product catalog",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "brand": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "responsibleId": { "type": "string" },
+        "responsibleName": { "type": "string" },
+        "status": { "type": "string" },
+        "urgency": { "type": "string" },
+        "barcode": { "type": "string" },
+        "notes": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "quantity", "unit", "status"]
+    },
+    "AppUser": {
+      "title": "AppUser",
+      "description": "User of the application",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["username", "name", "role"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Supplier contact information",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "contactPerson": { "type": "string" },
+        "category": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "SupplierQuote": {
+      "title": "SupplierQuote",
+      "description": "Quote proposed by a supplier for a shopping list item",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "supplierPhone": { "type": "string" },
+        "supplierEmail": { "type": "string" },
+        "price": { "type": "number" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "brand": { "type": "string" },
+        "notes": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["productId", "supplierName", "price", "quantity", "brand"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Products in shopping list and catalog"
+    },
+    "/app_users/{userId}": {
+      "schema": "AppUser",
+      "description": "Store employees and administrators"
+    },
+    "/suppliers/{supplierId}": {
+      "schema": "Supplier",
+      "description": "Store suppliers"
+    },
+    "/quotes/{quoteId}": {
+      "schema": "SupplierQuote",
+      "description": "Product quotes submitted by suppliers"
+    }
+  }
+}

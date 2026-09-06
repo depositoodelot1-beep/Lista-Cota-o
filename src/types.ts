@@ -56,3 +56,21 @@ export interface Supplier {
   updatedAt?: string;
 }
 
+export interface SupplierQuote {
+  id: string;
+  productId: string;
+  productName: string;
+  supplierId: string;
+  supplierName: string;
+  supplierPhone?: string;
+  supplierEmail?: string;
+  price: number; // Preço ofertado pelo fornecedor
+  quantity: number; // Quantidade disponível ou pacote
+  unit: string; // un, cx, pct, etc.
+  brand: string; // Marca que o fornecedor vende
+  notes?: string; // Prazo de entrega, faturamento, observações
+  status?: 'pending' | 'accepted' | 'rejected';
+  createdAt: string;
+  updatedAt?: string;
+}
+

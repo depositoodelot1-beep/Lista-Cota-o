@@ -3,6 +3,7 @@ import {
   subscribeToProducts,
   subscribeToUsers,
   subscribeToSuppliers,
+  subscribeToQuotes,
   initializeDefaultData,
   addProduct,
   updateProduct,
@@ -13,10 +14,12 @@ import {
   addSupplier,
   updateSupplier,
   deleteSupplier,
+  saveSupplierQuote,
+  deleteSupplierQuote,
   DEFAULT_USERS,
   DEFAULT_SUPPLIERS,
 } from './services/db';
-import { Product, AppUser, Supplier, ProductStatus, SortField, SortDirection, ProductUrgency, normalizeUrgency } from './types';
+import { Product, AppUser, Supplier, SupplierQuote, ProductStatus, SortField, SortDirection, ProductUrgency, normalizeUrgency } from './types';
 import { Header } from './components/Header';
 import { ResponsibleFilter } from './components/ResponsibleFilter';
 import { ProductCard } from './components/ProductCard';
@@ -31,7 +34,9 @@ import { ToastContainer, ToastMessage } from './components/Toast';
 import { ProductCatalogModal } from './components/ProductCatalogModal';
 import { BarcodeScannerModal } from './components/BarcodeScannerModal';
 import { SuppliersModal } from './components/SuppliersModal';
-import { ShoppingBag, Plus, RefreshCw, AlertCircle, CheckCheck, Package, CheckCircle2, ScanBarcode } from 'lucide-react';
+import { QuotesView } from './components/QuotesView';
+import { SupplierQuoteModal } from './components/SupplierQuoteModal';
+import { ShoppingBag, Plus, RefreshCw, AlertCircle, CheckCheck, Package, CheckCircle2, ScanBarcode, Scale } from 'lucide-react';
 import { normalizeSearchText } from './utils/text';
 
 export default function App() {
@@ -70,7 +75,28 @@ export default function App() {
   const [isCatalogOpen, setIsCatalogOpen] = useState(false);
   const [isSuppliersOpen, setIsSuppliersOpen] = useState(false);
   const [suppliers, setSuppliers] = useState<Supplier[]>(DEFAULT_SUPPLIERS);
-  const [activeNavTab, setActiveNavTab] = useState<'list' | 'add' | 'sheets' | 'admin'>('list');
+  const [quotes, setQuotes] = useState<SupplierQuote[]>([]);
+  const [activeNavTab, setActiveNavTab] = useState<'list' | 'quotes' | 'add' | 'sheets' | 'admin'>('list');
+
+  // Supplier Identity (for when suppliers enter quotes)
+  const [currentSupplierIdentity, setCurrentSupplierIdentity] = useState<{
+    id?: string;
+    name: string;
+    phone?: string;
+    email?: string;
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem('active_supplier_identity');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Supplier Quote Modal state
+  const [quoteModalProduct, setQuoteModalProduct] = useState<Product | null>(null);
+  const [quoteModalExistingQuote, setQuoteModalExistingQuote] = useState<SupplierQuote | null>(null);
+  const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
 
   // Multi-selection (Master Checkbox)
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
@@ -108,6 +134,7 @@ export default function App() {
     let unsubscribeProducts: () => void = () => {};
     let unsubscribeUsers: () => void = () => {};
     let unsubscribeSuppliers: () => void = () => {};
+    let unsubscribeQuotes: () => void = () => {};
 
     const startApp = async () => {
       try {
@@ -130,6 +157,10 @@ export default function App() {
           setProducts(allProds);
           setLoading(false);
         });
+
+        unsubscribeQuotes = subscribeToQuotes((allQuotes) => {
+          setQuotes(allQuotes);
+        });
       } catch (err) {
         console.error('Initialization error:', err);
         setLoading(false);
@@ -142,6 +173,7 @@ export default function App() {
       unsubscribeProducts();
       unsubscribeUsers();
       unsubscribeSuppliers();
+      unsubscribeQuotes();
     };
   }, []);
 
@@ -211,6 +243,79 @@ export default function App() {
       urgente: baseList.filter((p) => normalizeUrgency(p.urgency) === 'urgente').length,
     };
   }, [products, selectedUserId]);
+
+  // Map of quotes by product ID, sorted by price ASC (lowest price first)
+  const quotesByProductId = useMemo(() => {
+    const map = new Map<string, SupplierQuote[]>();
+    quotes.forEach((q) => {
+      const list = map.get(q.productId) || [];
+      list.push(q);
+      map.set(q.productId, list);
+    });
+    map.forEach((list) => {
+      list.sort((a, b) => a.price - b.price);
+    });
+    return map;
+  }, [quotes]);
+
+  const handleOpenQuoteModal = (product: Product, existingQuote: SupplierQuote | null) => {
+    setQuoteModalProduct(product);
+    setQuoteModalExistingQuote(existingQuote);
+    setIsQuoteModalOpen(true);
+  };
+
+  const handleSaveSupplierQuote = async (quoteData: {
+    productId: string;
+    productName: string;
+    supplierId: string;
+    supplierName: string;
+    supplierPhone?: string;
+    supplierEmail?: string;
+    price: number;
+    quantity: number;
+    unit: string;
+    brand: string;
+    notes?: string;
+  }) => {
+    try {
+      await saveSupplierQuote({
+        id: quoteModalExistingQuote?.id,
+        ...quoteData,
+        status: 'pending',
+      });
+      addToast(
+        quoteModalExistingQuote ? 'Cotação atualizada!' : 'Cotação salva com sucesso!',
+        `R$ ${quoteData.price.toFixed(2).replace('.', ',')} (${quoteData.brand}) por ${quoteData.supplierName}`,
+        'success'
+      );
+      setIsQuoteModalOpen(false);
+      setQuoteModalProduct(null);
+      setQuoteModalExistingQuote(null);
+    } catch (err: any) {
+      console.error('Error saving quote:', err);
+      addToast('Erro ao salvar cotação', err?.message || 'Tente novamente.', 'error');
+      throw err;
+    }
+  };
+
+  const handleDeleteSupplierQuote = async (id: string) => {
+    try {
+      await deleteSupplierQuote(id);
+      addToast('Cotação removida', undefined, 'info');
+    } catch (err: any) {
+      console.error('Error deleting quote:', err);
+      addToast('Erro ao remover cotação', err?.message, 'error');
+    }
+  };
+
+  const handleChangeSupplierIdentity = (supplier: { id?: string; name: string; phone?: string; email?: string }) => {
+    setCurrentSupplierIdentity(supplier);
+    try {
+      localStorage.setItem('active_supplier_identity', JSON.stringify(supplier));
+    } catch (e) {
+      console.warn('Could not persist supplier identity in localStorage:', e);
+    }
+  };
 
   // Multi-selection (Master Checkbox) helpers
   const isAllSelected =
@@ -491,29 +596,50 @@ export default function App() {
           id="phone-device-container"
           className="w-full max-w-[430px] h-screen sm:h-[820px] max-h-screen sm:max-h-[92vh] bg-slate-200 sm:rounded-[40px] shadow-2xl sm:border-[10px] sm:border-slate-800 overflow-hidden flex flex-col relative shrink-0"
         >
-          {/* Top Header */}
-          <Header
-            toBuyCount={toBuyCount}
-            outOfStockCount={outOfStockCount}
-            currentUser={currentUser}
-            supplierCount={suppliers.length}
-            onOpenSheets={() => setIsSheetsOpen(true)}
-            onOpenAdmin={() => setIsAdminOpen(true)}
-            onOpenCatalog={() => setIsCatalogOpen(true)}
-            onOpenSuppliers={() => setIsSuppliersOpen(true)}
-          />
+          {/* Top Header - Rendered only on standard list screens; Quotes has its own dedicated dark bar */}
+          {activeNavTab !== 'quotes' && (
+            <Header
+              toBuyCount={toBuyCount}
+              outOfStockCount={outOfStockCount}
+              currentUser={currentUser}
+              supplierCount={suppliers.length}
+              quotesCount={quotes.length}
+              onOpenSheets={() => setIsSheetsOpen(true)}
+              onOpenAdmin={() => setIsAdminOpen(true)}
+              onOpenCatalog={() => setIsCatalogOpen(true)}
+              onOpenSuppliers={() => setIsSuppliersOpen(true)}
+              onOpenQuotes={() => setActiveNavTab('quotes')}
+            />
+          )}
 
-          {/* Filtro de Busca na Lista de Compras com leitor de código de barras */}
-          <SearchAndFilters
-            searchTerm={searchTerm}
-            onSearchChange={(val) => {
-              setSearchTerm(val);
-              if (listBarcodeScanFeedback) setListBarcodeScanFeedback(null);
-            }}
-            onOpenBarcodeScanner={() => setIsListBarcodeScannerOpen(true)}
-            resultCount={filteredProducts.length}
-            placeholder="Pesquisar produto, marca ou código de barras..."
-          />
+          {activeNavTab === 'quotes' ? (
+            <QuotesView
+              products={products}
+              suppliers={suppliers}
+              quotes={quotes}
+              currentUser={currentUser}
+              currentSupplier={currentSupplierIdentity}
+              onChangeSupplierIdentity={handleChangeSupplierIdentity}
+              onOpenQuoteModal={handleOpenQuoteModal}
+              onDeleteQuote={handleDeleteSupplierQuote}
+              onBackToList={() => setActiveNavTab('list')}
+              onOpenSuppliers={() => setIsSuppliersOpen(true)}
+              onOpenSheets={() => setIsSheetsOpen(true)}
+              onToast={addToast}
+            />
+          ) : (
+            <>
+              {/* Filtro de Busca na Lista de Compras com leitor de código de barras */}
+              <SearchAndFilters
+                searchTerm={searchTerm}
+                onSearchChange={(val) => {
+                  setSearchTerm(val);
+                  if (listBarcodeScanFeedback) setListBarcodeScanFeedback(null);
+                }}
+                onOpenBarcodeScanner={() => setIsListBarcodeScannerOpen(true)}
+                resultCount={filteredProducts.length}
+                placeholder="Pesquisar produto, marca ou código de barras..."
+              />
 
           {/* Banner de resultado da leitura de código de barras na lista */}
           {listBarcodeScanFeedback && (
@@ -764,6 +890,8 @@ export default function App() {
                       product={product}
                       currentUser={currentUser}
                       isSelected={selectedProductIds.includes(product.id)}
+                      bestQuote={quotesByProductId.get(product.id)?.[0] || null}
+                      onOpenQuote={(p) => handleOpenQuoteModal(p, null)}
                       onToggleSelect={handleToggleSelectProduct}
                       onEdit={(p) => {
                         setEditingProduct(p);
@@ -777,23 +905,27 @@ export default function App() {
               </div>
             )}
           </main>
+        </>
+      )}
 
           {/* Floating Action Button (FAB) */}
-          <div className="absolute bottom-20 right-5 z-20">
-            <button
-              id="btn-fab-add-product"
-              type="button"
-              onClick={() => {
-                setEditingProduct(null);
-                setIsAddEditOpen(true);
-              }}
-              className="w-13 h-13 bg-blue-600 hover:bg-blue-700 active:scale-95 rounded-full shadow-lg flex items-center justify-center text-white transition-all cursor-pointer"
-              title="Adicionar Novo Produto"
-              aria-label="Adicionar Novo Produto"
-            >
-              <Plus className="w-7 h-7" />
-            </button>
-          </div>
+          {activeNavTab === 'list' && (
+            <div className="absolute bottom-20 right-5 z-20">
+              <button
+                id="btn-fab-add-product"
+                type="button"
+                onClick={() => {
+                  setEditingProduct(null);
+                  setIsAddEditOpen(true);
+                }}
+                className="w-13 h-13 bg-blue-600 hover:bg-blue-700 active:scale-95 rounded-full shadow-lg flex items-center justify-center text-white transition-all cursor-pointer"
+                title="Adicionar Novo Produto"
+                aria-label="Adicionar Novo Produto"
+              >
+                <Plus className="w-7 h-7" />
+              </button>
+            </div>
+          )}
 
           {/* Bottom Navigation Bar */}
           <BottomNav
@@ -803,6 +935,8 @@ export default function App() {
               if (tab === 'list') {
                 setSelectedUserId(null);
                 setStatusFilter('all');
+              } else if (tab === 'quotes') {
+                // Quotes tab selected
               } else if (tab === 'add') {
                 setEditingProduct(null);
                 setIsAddEditOpen(true);
@@ -814,6 +948,7 @@ export default function App() {
             }}
             currentUser={currentUser}
             totalProducts={toBuyCount}
+            totalQuotes={quotes.length}
           />
         </div>
 
@@ -853,6 +988,24 @@ export default function App() {
                   className="w-full py-2 bg-slate-800 text-white text-xs rounded-lg font-medium hover:bg-slate-700 transition-colors cursor-pointer"
                 >
                   Abrir Planilha
+                </button>
+              </div>
+
+              {/* Card de Cotações dos Fornecedores */}
+              <div className="p-4 bg-white rounded-xl shadow-sm border border-slate-100">
+                <p className="text-[10px] text-slate-400 uppercase font-bold mb-1 tracking-tight">
+                  Portal dos Fornecedores
+                </p>
+                <p className="text-xs text-slate-800 mb-3 font-medium">
+                  {quotes.length} {quotes.length === 1 ? 'proposta de preço' : 'propostas de preço'}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setActiveNavTab('quotes')}
+                  className="w-full py-2 bg-emerald-600 text-white text-xs rounded-lg font-bold hover:bg-emerald-700 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Scale className="w-3.5 h-3.5" />
+                  <span>Ver Comparativo</span>
                 </button>
               </div>
 
@@ -965,6 +1118,22 @@ export default function App() {
         onUpdateSupplier={handleUpdateSupplier}
         onDeleteSupplier={handleDeleteSupplier}
         onToast={addToast}
+      />
+
+      {/* Modal de Cotação de Fornecedor (Entrada de Preço, Quantidade e Marca) */}
+      <SupplierQuoteModal
+        isOpen={isQuoteModalOpen}
+        product={quoteModalProduct}
+        existingQuote={quoteModalExistingQuote}
+        suppliers={suppliers}
+        currentSupplier={currentSupplierIdentity}
+        onClose={() => {
+          setIsQuoteModalOpen(false);
+          setQuoteModalProduct(null);
+          setQuoteModalExistingQuote(null);
+        }}
+        onSave={handleSaveSupplierQuote}
+        onChangeSupplierIdentity={handleChangeSupplierIdentity}
       />
     </div>
   );

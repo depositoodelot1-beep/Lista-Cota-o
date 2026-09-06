@@ -12,13 +12,24 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Product, AppUser, Supplier } from '../types';
+import { Product, AppUser, Supplier, SupplierQuote } from '../types';
 
 const PRODUCTS_COLLECTION = 'products';
 const USERS_COLLECTION = 'app_users';
 const SUPPLIERS_COLLECTION = 'suppliers';
+const QUOTES_COLLECTION = 'quotes';
 
 export const DEFAULT_SUPPLIERS: Supplier[] = [
+  {
+    id: 'supp-thibabem',
+    name: 'Thibabem (Lucas)',
+    phone: '(31) 98765-4321',
+    email: 'lucas@thibabem.com.br',
+    contactPerson: 'Lucas Thibabem',
+    category: 'Tubos e Conexões',
+    notes: 'Distribuidor parceiro - cotação rápida',
+    createdAt: new Date().toISOString(),
+  },
   {
     id: 'supp-tigre',
     name: 'Tigre Tubos e Conexões',
@@ -172,6 +183,73 @@ export async function initializeDefaultData(): Promise<void> {
     if (prodSnapshot.empty) {
       for (const p of DEFAULT_PRODUCTS) {
         await addDoc(collection(db, PRODUCTS_COLLECTION), p);
+      }
+    }
+
+    const suppliersSnapshot = await getDocs(collection(db, SUPPLIERS_COLLECTION));
+    if (suppliersSnapshot.empty) {
+      for (const s of DEFAULT_SUPPLIERS) {
+        await setDoc(doc(db, SUPPLIERS_COLLECTION, s.id), s);
+      }
+    }
+
+    const quotesSnapshot = await getDocs(collection(db, QUOTES_COLLECTION));
+    if (quotesSnapshot.empty) {
+      const allProdsSnap = await getDocs(collection(db, PRODUCTS_COLLECTION));
+      let luvaId = '';
+      let fitaId = '';
+      allProdsSnap.forEach((d) => {
+        const data = d.data();
+        if (data.name?.toLowerCase().includes('luva soldável')) luvaId = d.id;
+        if (data.name?.toLowerCase().includes('fita veda rosca')) fitaId = d.id;
+      });
+
+      if (luvaId) {
+        await addDoc(collection(db, QUOTES_COLLECTION), {
+          productId: luvaId,
+          productName: 'Luva soldável 25mm',
+          supplierId: 'supp-thibabem',
+          supplierName: 'Thibabem (Lucas)',
+          supplierPhone: '(31) 98765-4321',
+          supplierEmail: 'lucas@thibabem.com.br',
+          price: 2.0,
+          quantity: 1,
+          unit: 'un',
+          brand: 'krona',
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+        });
+        await addDoc(collection(db, QUOTES_COLLECTION), {
+          productId: luvaId,
+          productName: 'Luva soldável 25mm',
+          supplierId: 'supp-amanco',
+          supplierName: 'Amanco Wavin Brasil',
+          supplierPhone: '(11) 97654-3210',
+          supplierEmail: 'pedidos@amanco.com.br',
+          price: 1.0,
+          quantity: 10,
+          unit: 'un',
+          brand: 'Amanco',
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+        });
+      }
+
+      if (fitaId) {
+        await addDoc(collection(db, QUOTES_COLLECTION), {
+          productId: fitaId,
+          productName: 'Fita veda rosca 18x25',
+          supplierId: 'supp-thibabem',
+          supplierName: 'Thibabem (Lucas)',
+          supplierPhone: '(31) 98765-4321',
+          supplierEmail: 'lucas@thibabem.com.br',
+          price: 3.0,
+          quantity: 1,
+          unit: 'un',
+          brand: 'Tigre',
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+        });
       }
     }
   } catch (error) {
@@ -411,5 +489,119 @@ export async function updateSupplier(id: string, updates: Partial<Supplier>): Pr
 export async function deleteSupplier(id: string): Promise<void> {
   const ref = doc(db, SUPPLIERS_COLLECTION, id);
   await deleteDoc(ref);
+}
+
+// ==========================================
+// SUPPLIER QUOTES (Cotações dos Fornecedores)
+// ==========================================
+
+export function subscribeToQuotes(
+  callback: (quotes: SupplierQuote[]) => void,
+  onError?: (error: Error) => void
+) {
+  try {
+    return onSnapshot(
+      collection(db, QUOTES_COLLECTION),
+      (snapshot) => {
+        const quotes: SupplierQuote[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          quotes.push({
+            id: docSnap.id,
+            productId: data.productId || '',
+            productName: data.productName || '',
+            supplierId: data.supplierId || '',
+            supplierName: data.supplierName || 'Fornecedor',
+            supplierPhone: data.supplierPhone || '',
+            supplierEmail: data.supplierEmail || '',
+            price: Number(data.price ?? 0),
+            quantity: Number(data.quantity ?? 0),
+            unit: data.unit || 'un',
+            brand: data.brand || '',
+            notes: data.notes || '',
+            status: data.status || 'pending',
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: data.updatedAt,
+          });
+        });
+        callback(quotes);
+      },
+      (err) => {
+        console.error('Firestore quotes subscription error:', err);
+        if (onError) onError(err);
+      }
+    );
+  } catch (error: any) {
+    if (onError) onError(error);
+    return () => {};
+  }
+}
+
+export async function saveSupplierQuote(
+  quoteData: Omit<SupplierQuote, 'id' | 'createdAt'> & { id?: string; createdAt?: string }
+): Promise<string> {
+  const { id, ...rest } = quoteData;
+
+  // Se já tiver ID passado, atualiza
+  if (id) {
+    const ref = doc(db, QUOTES_COLLECTION, id);
+    const payload = cleanFirestorePayload({
+      ...rest,
+      updatedAt: new Date().toISOString(),
+    });
+    await updateDoc(ref, payload);
+    return id;
+  }
+
+  // Verifica se já existe uma cotação deste fornecedor para este mesmo produto
+  try {
+    const allQuotesSnap = await getDocs(collection(db, QUOTES_COLLECTION));
+    let existingDocId: string | null = null;
+    allQuotesSnap.forEach((d) => {
+      const q = d.data();
+      if (
+        q.productId === rest.productId &&
+        ((rest.supplierId && q.supplierId === rest.supplierId) ||
+          q.supplierName?.trim().toLowerCase() === rest.supplierName?.trim().toLowerCase())
+      ) {
+        existingDocId = d.id;
+      }
+    });
+
+    if (existingDocId) {
+      const ref = doc(db, QUOTES_COLLECTION, existingDocId);
+      const payload = cleanFirestorePayload({
+        ...rest,
+        updatedAt: new Date().toISOString(),
+      });
+      await updateDoc(ref, payload);
+      return existingDocId;
+    }
+  } catch (e) {
+    console.warn('Checking existing quote error:', e);
+  }
+
+  // Cria nova cotação
+  const payload = cleanFirestorePayload({
+    ...rest,
+    status: rest.status || 'pending',
+    createdAt: new Date().toISOString(),
+    serverTime: serverTimestamp(),
+  });
+  const docRef = await addDoc(collection(db, QUOTES_COLLECTION), payload);
+  return docRef.id;
+}
+
+export async function deleteSupplierQuote(id: string): Promise<void> {
+  const ref = doc(db, QUOTES_COLLECTION, id);
+  await deleteDoc(ref);
+}
+
+export async function updateQuoteStatus(id: string, status: 'pending' | 'accepted' | 'rejected'): Promise<void> {
+  const ref = doc(db, QUOTES_COLLECTION, id);
+  await updateDoc(ref, {
+    status,
+    updatedAt: new Date().toISOString(),
+  });
 }
 
