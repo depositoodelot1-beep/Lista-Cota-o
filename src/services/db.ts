@@ -21,13 +21,36 @@ const QUOTES_COLLECTION = 'quotes';
 
 export const DEFAULT_SUPPLIERS: Supplier[] = [
   {
+    id: 'supp-bartofil',
+    name: 'Bartofil',
+    phone: '(31) 99876-1234',
+    email: 'vendas@bartofil.com.br',
+    password: '123',
+    contactPerson: 'Representante Bartofil',
+    category: 'Distribuidora',
+    notes: 'Entrega rápida e faturamento 30 dias',
+    createdAt: new Date().toISOString(),
+  },
+  {
     id: 'supp-thibabem',
     name: 'Thibabem (Lucas)',
     phone: '(31) 98765-4321',
     email: 'lucas@thibabem.com.br',
+    password: '123',
     contactPerson: 'Lucas Thibabem',
     category: 'Tubos e Conexões',
     notes: 'Distribuidor parceiro - cotação rápida',
+    createdAt: new Date().toISOString(),
+  },
+  {
+    id: 'supp-tambasa',
+    name: 'Tambasa',
+    phone: '(31) 98877-4321',
+    email: 'comercial@tambasa.com.br',
+    password: '123',
+    contactPerson: 'Atendimento Tambasa',
+    category: 'Atacadista',
+    notes: 'Catálogo amplo e pronta entrega',
     createdAt: new Date().toISOString(),
   },
   {
@@ -35,6 +58,7 @@ export const DEFAULT_SUPPLIERS: Supplier[] = [
     name: 'Tigre Tubos e Conexões',
     phone: '(11) 98765-4321',
     email: 'vendas@tigre.com.br',
+    password: '123',
     contactPerson: 'Rogério (Representante Comercial)',
     category: 'Hidráulica',
     notes: 'Entrega todas as terças e quintas. Pedido mínimo R$ 400,00.',
@@ -45,6 +69,7 @@ export const DEFAULT_SUPPLIERS: Supplier[] = [
     name: 'Amanco Wavin Brasil',
     phone: '(11) 97654-3210',
     email: 'pedidos@amanco.com.br',
+    password: '123',
     contactPerson: 'Juliana Pedidos',
     category: 'Tubos e Conexões',
     notes: 'Faturamento em 28 dias para pedidos acima de R$ 800,00.',
@@ -55,6 +80,7 @@ export const DEFAULT_SUPPLIERS: Supplier[] = [
     name: 'Distribuidora Silva & Cia',
     phone: '(11) 99123-4567',
     email: 'contato@silvadistribuidora.com.br',
+    password: '123',
     contactPerson: 'Carlos Silva',
     category: 'Materiais Gerais',
     notes: 'Entrega expressa no mesmo dia para pedidos até às 11h.',
@@ -208,8 +234,22 @@ export async function initializeDefaultData(): Promise<void> {
         await addDoc(collection(db, QUOTES_COLLECTION), {
           productId: luvaId,
           productName: 'Luva soldável 25mm',
+          supplierId: 'supp-bartofil',
+          supplierName: 'Bartofil',
+          supplierPhone: '(31) 99876-1234',
+          supplierEmail: 'vendas@bartofil.com.br',
+          price: 1.0,
+          quantity: 1,
+          unit: 'un',
+          brand: 'Amanco',
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+        });
+        await addDoc(collection(db, QUOTES_COLLECTION), {
+          productId: luvaId,
+          productName: 'Luva soldável 25mm',
           supplierId: 'supp-thibabem',
-          supplierName: 'Thibabem (Lucas)',
+          supplierName: 'Thibabem',
           supplierPhone: '(31) 98765-4321',
           supplierEmail: 'lucas@thibabem.com.br',
           price: 2.0,
@@ -222,12 +262,12 @@ export async function initializeDefaultData(): Promise<void> {
         await addDoc(collection(db, QUOTES_COLLECTION), {
           productId: luvaId,
           productName: 'Luva soldável 25mm',
-          supplierId: 'supp-amanco',
-          supplierName: 'Amanco Wavin Brasil',
-          supplierPhone: '(11) 97654-3210',
-          supplierEmail: 'pedidos@amanco.com.br',
-          price: 1.0,
-          quantity: 10,
+          supplierId: 'supp-tambasa',
+          supplierName: 'Tambasa',
+          supplierPhone: '(31) 98877-4321',
+          supplierEmail: 'comercial@tambasa.com.br',
+          price: 4.0,
+          quantity: 1,
           unit: 'un',
           brand: 'Amanco',
           status: 'pending',
@@ -285,6 +325,7 @@ export function subscribeToProducts(
             barcode: data.barcode || '',
             notes: data.notes || '',
             imageUrl: data.imageUrl || '',
+            selectedQuoteId: data.selectedQuoteId || '',
             createdAt: data.createdAt || new Date().toISOString(),
             updatedAt: data.updatedAt,
           });
@@ -441,6 +482,7 @@ export function subscribeToSuppliers(
             name: data.name || '',
             phone: data.phone || '',
             email: data.email || '',
+            password: data.password || data.accessPassword || '',
             contactPerson: data.contactPerson || '',
             category: data.category || '',
             notes: data.notes || '',
@@ -604,4 +646,53 @@ export async function updateQuoteStatus(id: string, status: 'pending' | 'accepte
     updatedAt: new Date().toISOString(),
   });
 }
+
+export async function chooseWinningQuote(productId: string, quoteId: string): Promise<void> {
+  const prodRef = doc(db, PRODUCTS_COLLECTION, productId);
+  await updateDoc(prodRef, {
+    selectedQuoteId: quoteId,
+    updatedAt: new Date().toISOString(),
+  });
+
+  try {
+    const quotesSnap = await getDocs(collection(db, QUOTES_COLLECTION));
+    for (const d of quotesSnap.docs) {
+      const q = d.data();
+      if (q.productId === productId) {
+        const qRef = doc(db, QUOTES_COLLECTION, d.id);
+        await updateDoc(qRef, {
+          status: d.id === quoteId ? 'accepted' : 'pending',
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Error updating quote status in chooseWinningQuote:', e);
+  }
+}
+
+export async function resetWinningQuote(productId: string): Promise<void> {
+  const prodRef = doc(db, PRODUCTS_COLLECTION, productId);
+  await updateDoc(prodRef, {
+    selectedQuoteId: '',
+    updatedAt: new Date().toISOString(),
+  });
+
+  try {
+    const quotesSnap = await getDocs(collection(db, QUOTES_COLLECTION));
+    for (const d of quotesSnap.docs) {
+      const q = d.data();
+      if (q.productId === productId) {
+        const qRef = doc(db, QUOTES_COLLECTION, d.id);
+        await updateDoc(qRef, {
+          status: 'pending',
+          updatedAt: new Date().toISOString(),
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('Error resetting quotes in resetWinningQuote:', e);
+  }
+}
+
 

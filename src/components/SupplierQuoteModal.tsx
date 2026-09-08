@@ -150,11 +150,6 @@ export const SupplierQuoteModal: React.FC<SupplierQuoteModalProps> = ({
       return;
     }
 
-    if (!brand.trim()) {
-      setErrorMsg('Informe a marca do produto que você vende.');
-      return;
-    }
-
     setIsSaving(true);
     try {
       await onSave({
@@ -167,7 +162,7 @@ export const SupplierQuoteModal: React.FC<SupplierQuoteModalProps> = ({
         price: parsedPrice,
         quantity: parsedQuantity,
         unit: unit.trim() || product.unit || 'un',
-        brand: brand.trim(),
+        brand: brand.trim() || product.brand || 'Conforme ofertado',
         notes: notes.trim(),
       });
 
@@ -374,7 +369,7 @@ export const SupplierQuoteModal: React.FC<SupplierQuoteModalProps> = ({
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
               <Tag className="w-3.5 h-3.5 text-indigo-600" />
-              Marca do Produto que Você Vende *
+              Marca do Produto (Opcional)
             </label>
             <input
               type="text"
@@ -382,10 +377,9 @@ export const SupplierQuoteModal: React.FC<SupplierQuoteModalProps> = ({
               value={brand}
               onChange={(e) => setBrand(e.target.value)}
               className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-              required
             />
             <span className="text-[11px] text-slate-400 mt-1 block">
-              Especifique a marca que você irá entregar com este preço
+              Caso deseje especificar a marca que irá entregar com este preço
             </span>
           </div>
 

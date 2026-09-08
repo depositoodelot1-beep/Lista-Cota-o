@@ -36,6 +36,8 @@ import { BarcodeScannerModal } from './components/BarcodeScannerModal';
 import { SuppliersModal } from './components/SuppliersModal';
 import { QuotesView } from './components/QuotesView';
 import { SupplierQuoteModal } from './components/SupplierQuoteModal';
+import { SupplierPortalView } from './components/SupplierPortalView';
+import { SupplierEmailLoginModal } from './components/SupplierEmailLoginModal';
 import { ShoppingBag, Plus, RefreshCw, AlertCircle, CheckCheck, Package, CheckCircle2, ScanBarcode, Scale } from 'lucide-react';
 import { normalizeSearchText } from './utils/text';
 
@@ -77,6 +79,60 @@ export default function App() {
   const [suppliers, setSuppliers] = useState<Supplier[]>(DEFAULT_SUPPLIERS);
   const [quotes, setQuotes] = useState<SupplierQuote[]>([]);
   const [activeNavTab, setActiveNavTab] = useState<'list' | 'quotes' | 'add' | 'sheets' | 'admin'>('list');
+
+  // Supplier Portal Mode state (when app is opened via supplier-specific URL, email login or tested by store manager)
+  const [supplierPortalSession, setSupplierPortalSession] = useState<{
+    active: boolean;
+    supplier: Supplier | null;
+    isTest: boolean;
+  }>(() => {
+    try {
+      const saved = localStorage.getItem('supplier_auth_session');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.active && parsed?.supplier) {
+          return {
+            active: true,
+            supplier: parsed.supplier,
+            isTest: Boolean(parsed.isTest),
+          };
+        }
+      }
+    } catch (e) {
+      console.warn('Could not parse supplier_auth_session from localStorage:', e);
+    }
+    return {
+      active: false,
+      supplier: null,
+      isTest: false,
+    };
+  });
+
+  const [isSupplierLoginModalOpen, setIsSupplierLoginModalOpen] = useState(false);
+
+  // Set or clear supplier session with persistent storage and URL cleanup
+  const handleSetSupplierSession = (supplier: Supplier | null, isTest: boolean = false) => {
+    if (supplier) {
+      const session = { active: true, supplier, isTest };
+      setSupplierPortalSession(session);
+      setCurrentSupplierIdentity(supplier);
+      try {
+        localStorage.setItem('supplier_auth_session', JSON.stringify(session));
+      } catch (e) {
+        console.warn('Failed to save supplier_auth_session:', e);
+      }
+    } else {
+      setSupplierPortalSession({ active: false, supplier: null, isTest: false });
+      try {
+        localStorage.removeItem('supplier_auth_session');
+      } catch (e) {
+        console.warn('Failed to remove supplier_auth_session:', e);
+      }
+      if (window.history.replaceState) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+  };
 
   // Supplier Identity (for when suppliers enter quotes)
   const [currentSupplierIdentity, setCurrentSupplierIdentity] = useState<{
@@ -176,6 +232,66 @@ export default function App() {
       unsubscribeQuotes();
     };
   }, []);
+
+  // Check URL parameters for direct isolated supplier portal access (via email, supplierId or portal flag)
+  useEffect(() => {
+    try {
+      const search = window.location.search;
+      if (!search) return;
+
+      const params = new URLSearchParams(search);
+      const portal = params.get('portal');
+      const supplierEmail = params.get('email') || params.get('fornecedorEmail') || params.get('supplierEmail');
+      const supplierId = params.get('fornecedorId') || params.get('fornecedor') || params.get('supplierId');
+      const supplierName = params.get('empresa') || params.get('fornecedorNome') || params.get('supplier');
+
+      if (supplierEmail || portal === 'fornecedor' || portal === 'cotação' || portal === 'cotacao' || supplierId || supplierName) {
+        let matched: Supplier | undefined;
+
+        if (supplierEmail) {
+          const normEmail = supplierEmail.trim().toLowerCase();
+          matched = suppliers.find((s) => s.email?.trim().toLowerCase() === normEmail);
+        }
+
+        if (!matched && supplierId) {
+          matched = suppliers.find((s) => s.id.toLowerCase() === supplierId.toLowerCase());
+        }
+
+        if (!matched && supplierName) {
+          const normQuery = normalizeSearchText(supplierName);
+          matched = suppliers.find(
+            (s) =>
+              normalizeSearchText(s.name) === normQuery ||
+              normalizeSearchText(s.name).includes(normQuery) ||
+              normQuery.includes(normalizeSearchText(s.name))
+          );
+        }
+
+        // Check if there is already an active authenticated session for this supplier
+        const savedSession = localStorage.getItem('supplier_auth_session');
+        let isAuthenticated = false;
+        if (savedSession) {
+          try {
+            const parsed = JSON.parse(savedSession);
+            if (parsed?.active && parsed?.supplier) {
+              if (!matched || parsed.supplier.id === matched.id || parsed.supplier.email === matched.email) {
+                isAuthenticated = true;
+              }
+            }
+          } catch {}
+        }
+
+        if (!isAuthenticated) {
+          // Open supplier login modal requiring email and admin-created password
+          setIsSupplierLoginModalOpen(true);
+        } else if (matched) {
+          handleSetSupplierSession(matched, false);
+        }
+      }
+    } catch (e) {
+      console.error('Error parsing portal URL params:', e);
+    }
+  }, [suppliers]);
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
@@ -510,7 +626,8 @@ export default function App() {
 
   // Fornecedores handlers
   const handleAddSupplier = async (supplierData: Omit<Supplier, 'id'>) => {
-    await addSupplier(supplierData);
+    const id = await addSupplier(supplierData);
+    return id;
   };
 
   const handleUpdateSupplier = async (id: string, updates: Partial<Supplier>) => {
@@ -596,38 +713,58 @@ export default function App() {
           id="phone-device-container"
           className="w-full max-w-[430px] h-screen sm:h-[820px] max-h-screen sm:max-h-[92vh] bg-slate-200 sm:rounded-[40px] shadow-2xl sm:border-[10px] sm:border-slate-800 overflow-hidden flex flex-col relative shrink-0"
         >
-          {/* Top Header - Rendered only on standard list screens; Quotes has its own dedicated dark bar */}
-          {activeNavTab !== 'quotes' && (
-            <Header
-              toBuyCount={toBuyCount}
-              outOfStockCount={outOfStockCount}
-              currentUser={currentUser}
-              supplierCount={suppliers.length}
-              quotesCount={quotes.length}
-              onOpenSheets={() => setIsSheetsOpen(true)}
-              onOpenAdmin={() => setIsAdminOpen(true)}
-              onOpenCatalog={() => setIsCatalogOpen(true)}
-              onOpenSuppliers={() => setIsSuppliersOpen(true)}
-              onOpenQuotes={() => setActiveNavTab('quotes')}
-            />
-          )}
-
-          {activeNavTab === 'quotes' ? (
-            <QuotesView
+          {supplierPortalSession.active && supplierPortalSession.supplier ? (
+            <SupplierPortalView
+              supplier={supplierPortalSession.supplier}
               products={products}
-              suppliers={suppliers}
-              quotes={quotes}
-              currentUser={currentUser}
-              currentSupplier={currentSupplierIdentity}
-              onChangeSupplierIdentity={handleChangeSupplierIdentity}
-              onOpenQuoteModal={handleOpenQuoteModal}
-              onDeleteQuote={handleDeleteSupplierQuote}
-              onBackToList={() => setActiveNavTab('list')}
-              onOpenSuppliers={() => setIsSuppliersOpen(true)}
-              onOpenSheets={() => setIsSheetsOpen(true)}
+              supplierQuotes={quotes.filter(
+                (q) =>
+                  (supplierPortalSession.supplier?.id && q.supplierId === supplierPortalSession.supplier.id) ||
+                  q.supplierName.trim().toLowerCase() === supplierPortalSession.supplier?.name.trim().toLowerCase()
+              )}
+              onSaveQuote={handleSaveSupplierQuote}
               onToast={addToast}
+              isTestingMode={supplierPortalSession.isTest}
+              onExitTestingMode={() => handleSetSupplierSession(null)}
+              onLogout={() => handleSetSupplierSession(null)}
             />
           ) : (
+            <>
+              {/* Top Header - Rendered only on standard list screens; Quotes has its own dedicated dark bar */}
+              {activeNavTab !== 'quotes' && (
+                <Header
+                  toBuyCount={toBuyCount}
+                  outOfStockCount={outOfStockCount}
+                  currentUser={currentUser}
+                  supplierCount={suppliers.length}
+                  onOpenSheets={() => setIsSheetsOpen(true)}
+                  onOpenAdmin={() => setIsAdminOpen(true)}
+                  onOpenCatalog={() => setIsCatalogOpen(true)}
+                  onOpenSuppliers={() => setIsSuppliersOpen(true)}
+                  onOpenSupplierLogin={() => setIsSupplierLoginModalOpen(true)}
+                />
+              )}
+
+              {activeNavTab === 'quotes' ? (
+                <QuotesView
+                  products={products}
+                  suppliers={suppliers}
+                  quotes={quotes}
+                  currentUser={currentUser}
+                  currentSupplier={currentSupplierIdentity}
+                  onChangeSupplierIdentity={handleChangeSupplierIdentity}
+                  onOpenQuoteModal={handleOpenQuoteModal}
+                  onDeleteQuote={handleDeleteSupplierQuote}
+                  onBackToList={() => setActiveNavTab('list')}
+                  onOpenSuppliers={() => setIsSuppliersOpen(true)}
+                  onOpenSheets={() => setIsSheetsOpen(true)}
+                  onOpenSupplierPortal={(sup) => {
+                    handleSetSupplierSession(sup, true);
+                  }}
+                  onOpenSupplierLogin={() => setIsSupplierLoginModalOpen(true)}
+                  onToast={addToast}
+                />
+              ) : (
             <>
               {/* Filtro de Busca na Lista de Compras com leitor de código de barras */}
               <SearchAndFilters
@@ -890,7 +1027,14 @@ export default function App() {
                       product={product}
                       currentUser={currentUser}
                       isSelected={selectedProductIds.includes(product.id)}
-                      bestQuote={quotesByProductId.get(product.id)?.[0] || null}
+                      bestQuote={(() => {
+                        const pQuotes = quotesByProductId.get(product.id) || [];
+                        if (product.selectedQuoteId) {
+                          const chosen = pQuotes.find((q) => q.id === product.selectedQuoteId);
+                          if (chosen) return chosen;
+                        }
+                        return pQuotes[0] || null;
+                      })()}
                       onOpenQuote={(p) => handleOpenQuoteModal(p, null)}
                       onToggleSelect={handleToggleSelectProduct}
                       onEdit={(p) => {
@@ -931,6 +1075,13 @@ export default function App() {
           <BottomNav
             activeTab={activeNavTab}
             onChangeTab={(tab) => {
+              if (tab === 'quotes') {
+                if (currentUser.role !== 'admin') {
+                  addToast('Acesso Restrito', 'Digite a senha do administrador para acessar as Cotações.', 'info');
+                  setIsAdminOpen(true);
+                  return;
+                }
+              }
               setActiveNavTab(tab);
               if (tab === 'list') {
                 setSelectedUserId(null);
@@ -950,10 +1101,13 @@ export default function App() {
             totalProducts={toBuyCount}
             totalQuotes={quotes.length}
           />
+        </>
+      )}
         </div>
 
         {/* Desktop Side Panel matching Professional Polish Design */}
-        <div className="ml-8 w-[320px] hidden lg:block shrink-0">
+        {!supplierPortalSession.active && (
+          <div className="ml-8 w-[320px] hidden lg:block shrink-0">
           <div className="bg-white/60 backdrop-blur-md rounded-3xl p-6 border border-white/30 shadow-xl space-y-4">
             <h2 className="text-slate-800 font-bold text-lg mb-3">Status Administrativo</h2>
 
@@ -1001,7 +1155,14 @@ export default function App() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => setActiveNavTab('quotes')}
+                  onClick={() => {
+                    if (currentUser.role !== 'admin') {
+                      addToast('Acesso Restrito', 'Digite a senha do administrador para acessar as Cotações.', 'info');
+                      setIsAdminOpen(true);
+                      return;
+                    }
+                    setActiveNavTab('quotes');
+                  }}
                   className="w-full py-2 bg-emerald-600 text-white text-xs rounded-lg font-bold hover:bg-emerald-700 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <Scale className="w-3.5 h-3.5" />
@@ -1033,6 +1194,7 @@ export default function App() {
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Add / Edit Product Modal */}
@@ -1069,6 +1231,10 @@ export default function App() {
         isOpen={isAdminOpen}
         currentUser={currentUser}
         users={users}
+        supplierCount={suppliers.length}
+        onOpenSheets={() => setIsSheetsOpen(true)}
+        onOpenCatalog={() => setIsCatalogOpen(true)}
+        onOpenSuppliers={() => setIsSuppliersOpen(true)}
         onClose={() => {
           setIsAdminOpen(false);
           setActiveNavTab('list');
@@ -1134,6 +1300,20 @@ export default function App() {
         }}
         onSave={handleSaveSupplierQuote}
         onChangeSupplierIdentity={handleChangeSupplierIdentity}
+      />
+
+      {/* Modal de Acesso do Fornecedor por E-mail (Acesso Restrito à Cotação) */}
+      <SupplierEmailLoginModal
+        isOpen={isSupplierLoginModalOpen}
+        onClose={() => setIsSupplierLoginModalOpen(false)}
+        suppliers={suppliers}
+        onLoginSupplier={(supp) => handleSetSupplierSession(supp, false)}
+        onRegisterAndLoginSupplier={async (supplierData) => {
+          const id = await handleAddSupplier(supplierData);
+          const newSupp: Supplier = { ...supplierData, id };
+          return newSupp;
+        }}
+        onToast={addToast}
       />
     </div>
   );

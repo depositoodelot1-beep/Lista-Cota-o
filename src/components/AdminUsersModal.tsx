@@ -14,6 +14,10 @@ import {
   LogOut,
   Palette,
   Users,
+  FileSpreadsheet,
+  Package,
+  Truck,
+  ExternalLink,
 } from 'lucide-react';
 import { AppUser, UserRole } from '../types';
 import { capitalizeWords } from '../utils/text';
@@ -22,6 +26,10 @@ interface AdminUsersModalProps {
   isOpen: boolean;
   currentUser: AppUser;
   users: AppUser[];
+  supplierCount?: number;
+  onOpenSheets?: () => void;
+  onOpenCatalog?: () => void;
+  onOpenSuppliers?: () => void;
   onClose: () => void;
   onLoginAsAdmin: (username: string, pass: string) => Promise<boolean>;
   onSwitchUser: (user: AppUser) => void;
@@ -47,6 +55,10 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
   isOpen,
   currentUser,
   users,
+  supplierCount,
+  onOpenSheets,
+  onOpenCatalog,
+  onOpenSuppliers,
   onClose,
   onLoginAsAdmin,
   onSwitchUser,
@@ -192,10 +204,10 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
         className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 my-8 animate-in zoom-in-95 duration-150"
       >
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
           <div className="flex items-center gap-3">
             <div
-              className={`w-11 h-11 rounded-2xl flex items-center justify-center ${
+              className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
                 isAdmin ? 'bg-blue-50 text-blue-600 border border-blue-200' : 'bg-amber-50 text-amber-600 border border-amber-200'
               }`}
             >
@@ -204,7 +216,7 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 id="modal-admin-title" className="text-xl font-bold text-slate-900">
-                  {isAdmin ? 'Gerenciamento de Usuários' : 'Área do Administrador'}
+                  {isAdmin ? 'Gerenciamento & Administração' : 'Área do Administrador'}
                 </h2>
                 {isAdmin && (
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
@@ -214,19 +226,163 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
               </div>
               <p className="text-xs text-slate-500">
                 {isAdmin
-                  ? 'Controle de funcionários, senhas e permissões do sistema'
+                  ? 'Controle de funcionários, senhas, catálogo, planilhas e fornecedores'
                   : 'Faça login com usuário de administrador para gerenciar a loja'}
               </p>
             </div>
           </div>
-          <button
-            id="btn-close-admin-modal"
-            type="button"
-            onClick={onClose}
-            className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" />
-          </button>
+
+          <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+            {/* Exactly the 3 requested action buttons from header: Sheets, Catalog, Suppliers */}
+            <div className="flex items-center gap-1.5 p-1 bg-slate-50 border border-slate-200/80 rounded-xl shadow-2xs">
+              {/* Google Sheets button */}
+              <button
+                id="btn-admin-header-sheets"
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenSheets?.();
+                }}
+                className="w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200/80 flex items-center justify-center transition-colors cursor-pointer"
+                title="Exportar para Google Sheets"
+                aria-label="Google Sheets"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+              </button>
+
+              {/* Product Catalog button */}
+              <button
+                id="btn-admin-header-catalog"
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenCatalog?.();
+                }}
+                className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-colors cursor-pointer"
+                title="Base de Produtos (Catálogo Completo)"
+                aria-label="Catálogo de Produtos"
+              >
+                <Package className="w-4 h-4" />
+              </button>
+
+              {/* Suppliers button */}
+              <button
+                id="btn-admin-header-suppliers"
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenSuppliers?.();
+                }}
+                className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-colors cursor-pointer relative"
+                title="Fornecedores (Contatos, Telefones e Senhas)"
+                aria-label="Fornecedores"
+              >
+                <Truck className="w-4 h-4" />
+                {typeof supplierCount === 'number' && supplierCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 bg-blue-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center border border-white">
+                    {supplierCount > 9 ? '9+' : supplierCount}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            <button
+              id="btn-close-admin-modal"
+              type="button"
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Quick Access Modules Cards */}
+        <div className="mt-3.5 p-2.5 bg-slate-50/80 rounded-2xl border border-slate-200/80">
+          <div className="flex items-center justify-between mb-2 px-1">
+            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              Abas e Módulos do Sistema
+            </span>
+            <span className="text-[10px] font-semibold text-slate-400">
+              Clique nos ícones para navegar
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {/* Sheets Module */}
+            <button
+              id="btn-admin-card-sheets"
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenSheets?.();
+              }}
+              className="p-2 bg-white hover:bg-emerald-50/50 border border-slate-200 hover:border-emerald-300 rounded-xl flex items-center gap-2 transition-all text-left cursor-pointer group shadow-2xs"
+            >
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200/80 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <FileSpreadsheet className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-slate-800 block truncate group-hover:text-emerald-900">
+                  Google Sheets
+                </span>
+                <span className="text-[10px] text-slate-400 hidden sm:block truncate">
+                  Exportar e Sincronizar
+                </span>
+              </div>
+            </button>
+
+            {/* Catalog Module */}
+            <button
+              id="btn-admin-card-catalog"
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenCatalog?.();
+              }}
+              className="p-2 bg-white hover:bg-blue-50/50 border border-slate-200 hover:border-blue-300 rounded-xl flex items-center gap-2 transition-all text-left cursor-pointer group shadow-2xs"
+            >
+              <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 border border-slate-200 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                <Package className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-slate-800 block truncate group-hover:text-blue-900">
+                  Catálogo
+                </span>
+                <span className="text-[10px] text-slate-400 hidden sm:block truncate">
+                  Base de Produtos
+                </span>
+              </div>
+            </button>
+
+            {/* Suppliers Module */}
+            <button
+              id="btn-admin-card-suppliers"
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenSuppliers?.();
+              }}
+              className="p-2 bg-white hover:bg-indigo-50/50 border border-slate-200 hover:border-indigo-300 rounded-xl flex items-center gap-2 transition-all text-left cursor-pointer group shadow-2xs"
+            >
+              <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 border border-slate-200 flex items-center justify-center shrink-0 relative group-hover:scale-105 transition-transform">
+                <Truck className="w-4 h-4" />
+                {typeof supplierCount === 'number' && supplierCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 bg-blue-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center border border-white">
+                    {supplierCount > 9 ? '9+' : supplierCount}
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <span className="text-xs font-bold text-slate-800 block truncate group-hover:text-indigo-900">
+                  Fornecedores
+                </span>
+                <span className="text-[10px] text-slate-400 hidden sm:block truncate">
+                  Contatos e Senhas
+                </span>
+              </div>
+            </button>
+          </div>
         </div>
 
         {/* Navigation Tabs inside modal - fixed without horizontal scroll */}

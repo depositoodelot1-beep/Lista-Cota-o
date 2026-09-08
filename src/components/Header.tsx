@@ -1,5 +1,5 @@
 import React from 'react';
-import { FileSpreadsheet, Settings, Package, Truck, Scale } from 'lucide-react';
+import { Settings, Lock } from 'lucide-react';
 import { AppUser } from '../types';
 
 interface HeaderProps {
@@ -7,25 +7,19 @@ interface HeaderProps {
   outOfStockCount: number;
   currentUser: AppUser;
   supplierCount?: number;
-  quotesCount?: number;
-  onOpenSheets: () => void;
+  onOpenSheets?: () => void;
   onOpenAdmin: () => void;
-  onOpenCatalog: () => void;
-  onOpenSuppliers: () => void;
-  onOpenQuotes?: () => void;
+  onOpenCatalog?: () => void;
+  onOpenSuppliers?: () => void;
+  onOpenSupplierLogin?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   toBuyCount,
   outOfStockCount,
   currentUser,
-  supplierCount,
-  quotesCount,
-  onOpenSheets,
   onOpenAdmin,
-  onOpenCatalog,
-  onOpenSuppliers,
-  onOpenQuotes,
+  onOpenSupplierLogin,
 }) => {
   return (
     <header id="app-header" className="bg-white px-5 pt-5 pb-3 border-b border-slate-100 shadow-xs z-10">
@@ -68,65 +62,20 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Action icon buttons styled with Professional Polish slate-100 & rounded-xl */}
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* Cotações dos Fornecedores */}
-            {onOpenQuotes && (
+            {/* Acesso Fornecedor por E-mail */}
+            {onOpenSupplierLogin && (
               <button
-                id="btn-header-quotes"
+                id="btn-header-supplier-login"
                 type="button"
-                onClick={onOpenQuotes}
-                className="w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/80 flex items-center justify-center transition-colors cursor-pointer relative"
-                title="Cotações de Fornecedores & Comparador de Preços"
-                aria-label="Cotações"
+                onClick={onOpenSupplierLogin}
+                className="h-8 px-2.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300/80 flex items-center gap-1.5 text-[11px] font-bold transition-colors cursor-pointer shadow-2xs"
+                title="Acesso do Fornecedor por E-mail (Restrito à Cotação)"
+                aria-label="Área do Fornecedor"
               >
-                <Scale className="w-4 h-4" />
-                {typeof quotesCount === 'number' && quotesCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 bg-emerald-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center border border-white">
-                    {quotesCount > 9 ? '9+' : quotesCount}
-                  </span>
-                )}
+                <Lock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="hidden sm:inline">Área Fornecedor</span>
               </button>
             )}
-
-            {/* Green Google Sheets button */}
-            <button
-              id="btn-header-sheets"
-              type="button"
-              onClick={onOpenSheets}
-              className="w-8 h-8 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-200/80 flex items-center justify-center transition-colors cursor-pointer"
-              title="Exportar para Google Sheets"
-              aria-label="Google Sheets"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-            </button>
-
-            {/* Catalog of all products button right near Settings */}
-            <button
-              id="btn-header-catalog"
-              type="button"
-              onClick={onOpenCatalog}
-              className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-colors cursor-pointer"
-              title="Base de Produtos (Catálogo Completo)"
-              aria-label="Catálogo de Produtos"
-            >
-              <Package className="w-4 h-4" />
-            </button>
-
-            {/* Fornecedores button */}
-            <button
-              id="btn-header-suppliers"
-              type="button"
-              onClick={onOpenSuppliers}
-              className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 flex items-center justify-center transition-colors cursor-pointer relative"
-              title="Fornecedores (Contatos, Telefone e E-mail)"
-              aria-label="Fornecedores"
-            >
-              <Truck className="w-4 h-4" />
-              {typeof supplierCount === 'number' && supplierCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] px-0.5 bg-blue-600 text-white text-[8px] font-bold rounded-full flex items-center justify-center border border-white">
-                  {supplierCount > 9 ? '9+' : supplierCount}
-                </span>
-              )}
-            </button>
 
             {/* Admin button */}
             <button

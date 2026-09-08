@@ -16,6 +16,13 @@ import {
   Building2,
   ArrowLeft,
   CheckCircle2,
+  Key,
+  Copy,
+  Eye,
+  EyeOff,
+  Sparkles,
+  Lock,
+  ShieldCheck,
 } from 'lucide-react';
 import { Supplier } from '../types';
 import { capitalizeWords, normalizeSearchText } from '../utils/text';
@@ -29,6 +36,11 @@ interface SuppliersModalProps {
   onDeleteSupplier: (id: string) => Promise<void>;
   onToast: (title: string, description?: string, type?: 'success' | 'error' | 'info') => void;
 }
+
+// Helper to generate a clean 6-digit numeric password easy to type on mobile
+export const generateSupplierPassword = (): string => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
 
 export const SuppliersModal: React.FC<SuppliersModalProps> = ({
   isOpen,
@@ -47,11 +59,16 @@ export const SuppliersModal: React.FC<SuppliersModalProps> = ({
   const [formName, setFormName] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formEmail, setFormEmail] = useState('');
+  const [formPassword, setFormPassword] = useState('');
+  const [showFormPassword, setShowFormPassword] = useState(false);
   const [formContactPerson, setFormContactPerson] = useState('');
   const [formCategory, setFormCategory] = useState('');
   const [formNotes, setFormNotes] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Track visibility of password per supplier card in list
+  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
 
   // Delete confirmation state
   const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null);
@@ -61,6 +78,8 @@ export const SuppliersModal: React.FC<SuppliersModalProps> = ({
     setFormName('');
     setFormPhone('');
     setFormEmail('');
+    setFormPassword('');
+    setShowFormPassword(false);
     setFormContactPerson('');
     setFormCategory('');
     setFormNotes('');
@@ -70,6 +89,8 @@ export const SuppliersModal: React.FC<SuppliersModalProps> = ({
 
   const handleStartAdd = () => {
     resetForm();
+    // Pre-generate a password automatically for convenience
+    setFormPassword(generateSupplierPassword());
     setView('add');
   };
 
@@ -78,11 +99,75 @@ export const SuppliersModal: React.FC<SuppliersModalProps> = ({
     setFormName(supp.name);
     setFormPhone(supp.phone);
     setFormEmail(supp.email);
+    setFormPassword(supp.password || '');
+    setShowFormPassword(false);
     setFormContactPerson(supp.contactPerson || '');
     setFormCategory(supp.category || '');
     setFormNotes(supp.notes || '');
     setFormError(null);
     setView('edit');
+  };
+
+  const togglePasswordVisibility = (suppId: string) => {
+    setVisiblePasswords((prev) => ({
+      ...prev,
+      [suppId]: !prev[suppId],
+    }));
+  };
+
+  const getSupplierPortalLink = (supp: Supplier) => {
+    const params = new URLSearchParams();
+    params.set('portal', 'fornecedor');
+    if (supp.id) params.set('fornecedorId', supp.id);
+    if (supp.email) params.set('email', supp.email);
+    params.set('empresa', supp.name);
+    return `${window.location.origin}/?${params.toString()}`;
+  };
+
+  const handleQuickGeneratePassword = async (supp: Supplier) => {
+    const newPass = generateSupplierPassword();
+    try {
+      await onUpdateSupplier(supp.id, { password: newPass });
+      onToast('Senha Gerada!', `A senha de acesso de "${supp.name}" foi definida para: ${newPass}`, 'success');
+    } catch (err: any) {
+      onToast('Erro ao gerar senha', err?.message || 'Tente novamente.', 'error');
+    }
+  };
+
+  const handleCopySupplierCredentials = async (supp: Supplier) => {
+    const portalUrl = getSupplierPortalLink(supp);
+    const pass = supp.password || '(senha não configurada)';
+    const text = `*DADOS DE ACESSO - ÁREA DO FORNECEDOR*\n\n` +
+      `Empresa: ${supp.name}\n` +
+      `E-mail: ${supp.email || 'Não informado'}\n` +
+      `Senha: ${pass}\n\n` +
+      `Acesso direto:\n${portalUrl}\n\n` +
+      `Acesse o link e informe seu e-mail e senha para preencher seus preços com sigilo e praticidade.`;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      onToast('Acesso Copiado!', `E-mail e senha de "${supp.name}" copiados para a área de transferência.`, 'success');
+    } catch (e) {
+      onToast(`Senha: ${pass}`, `E-mail: ${supp.email}`, 'info');
+    }
+  };
+
+  const handleSendWhatsAppCredentials = (supp: Supplier) => {
+    const cleanPhone = supp.phone.replace(/\D/g, '');
+    if (!cleanPhone) {
+      onToast('Telefone não cadastrado', 'Informe um telefone para envio no WhatsApp.', 'error');
+      return;
+    }
+    const portalUrl = getSupplierPortalLink(supp);
+    const pass = supp.password || generateSupplierPassword();
+    const text = `Olá, ${supp.contactPerson || supp.name}! Tudo bem?\n\n` +
+      `Seguem os dados de acesso para preencher sua cotação de produtos:\n\n` +
+      `📧 *E-mail de Acesso:* ${supp.email || 'Informe seu e-mail'}\n` +
+      `🔑 *Senha:* ${pass}\n\n` +
+      `🔗 *Link do Portal:*\n${portalUrl}\n\n` +
+      `Basta acessar o link, inserir seu e-mail e senha para informar seus preços. Seus valores ficam em total sigilo.`;
+
+    window.open(`https://wa.me/55${cleanPhone}?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   const handleSaveSupplier = async (e: React.FormEvent) => {
@@ -92,6 +177,7 @@ export const SuppliersModal: React.FC<SuppliersModalProps> = ({
     const trimmedName = formName.trim();
     const trimmedPhone = formPhone.trim();
     const trimmedEmail = formEmail.trim();
+    const trimmedPassword = formPassword.trim();
 
     if (!trimmedName) {
       setFormError('Por favor, informe o nome do fornecedor ou empresa.');
@@ -110,6 +196,7 @@ export const SuppliersModal: React.FC<SuppliersModalProps> = ({
           name: capitalizeWords(trimmedName),
           phone: trimmedPhone,
           email: trimmedEmail.toLowerCase(),
+          password: trimmedPassword || undefined,
           contactPerson: formContactPerson.trim() ? capitalizeWords(formContactPerson.trim()) : undefined,
           category: formCategory.trim() ? capitalizeWords(formCategory.trim()) : undefined,
           notes: formNotes.trim() || undefined,
@@ -120,12 +207,13 @@ export const SuppliersModal: React.FC<SuppliersModalProps> = ({
           name: capitalizeWords(trimmedName),
           phone: trimmedPhone,
           email: trimmedEmail.toLowerCase(),
+          password: trimmedPassword || generateSupplierPassword(),
           contactPerson: formContactPerson.trim() ? capitalizeWords(formContactPerson.trim()) : undefined,
           category: formCategory.trim() ? capitalizeWords(formCategory.trim()) : undefined,
           notes: formNotes.trim() || undefined,
           createdAt: new Date().toISOString(),
         });
-        onToast('Fornecedor cadastrado', `"${trimmedName}" foi adicionado à lista de fornecedores.`);
+        onToast('Fornecedor cadastrado', `"${trimmedName}" foi adicionado com senha de acesso gerada.`);
       }
       resetForm();
       setView('list');
@@ -414,6 +502,79 @@ export const SuppliersModal: React.FC<SuppliersModalProps> = ({
                           </div>
                         )}
 
+                        {/* Senha e Acesso ao Portal do Fornecedor */}
+                        <div className="mt-1 bg-slate-50/90 p-2.5 rounded-xl border border-slate-200 flex flex-col gap-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0">
+                                <Key className="w-3.5 h-3.5 text-emerald-700" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 block">
+                                  Senha do Fornecedor
+                                </span>
+                                {supp.password ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-mono font-black text-xs text-slate-900 tracking-wider">
+                                      {visiblePasswords[supp.id] ? supp.password : '••••••'}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => togglePasswordVisibility(supp.id)}
+                                      className="text-slate-400 hover:text-slate-600 p-0.5 cursor-pointer"
+                                      title={visiblePasswords[supp.id] ? "Ocultar senha" : "Ver senha"}
+                                    >
+                                      {visiblePasswords[supp.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] font-bold text-amber-600">
+                                    Sem senha cadastrada
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Botão para Gerar ou Alterar Senha */}
+                            <button
+                              type="button"
+                              onClick={() => handleQuickGeneratePassword(supp)}
+                              className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-emerald-700 hover:text-emerald-800 border border-emerald-300 hover:border-emerald-400 rounded-lg text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs shrink-0"
+                              title={supp.password ? "Gerar uma nova senha para este fornecedor" : "Gerar senha de acesso para este fornecedor"}
+                            >
+                              <Sparkles className="w-3 h-3 text-emerald-600" />
+                              <span>{supp.password ? 'Gerar Nova' : 'Gerar Senha'}</span>
+                            </button>
+                          </div>
+
+                          {/* Ações de Compartilhar Acesso com o Fornecedor */}
+                          {supp.password && (
+                            <div className="flex items-center gap-1.5 pt-1.5 border-t border-slate-200/80">
+                              <button
+                                type="button"
+                                onClick={() => handleCopySupplierCredentials(supp)}
+                                className="flex-1 py-1 px-2 bg-white hover:bg-slate-100 border border-slate-200 hover:border-slate-300 text-slate-700 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                                title="Copiar E-mail, Senha e Link de Acesso"
+                              >
+                                <Copy className="w-3 h-3 text-slate-500" />
+                                <span>Copiar Acesso</span>
+                              </button>
+
+                              {isMobileWhatsApp && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendWhatsAppCredentials(supp)}
+                                  className="py-1 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10px] font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer shrink-0 shadow-2xs"
+                                  title="Enviar E-mail, Senha e Link pelo WhatsApp"
+                                >
+                                  <MessageCircle className="w-3 h-3" />
+                                  <span>Enviar WhatsApp</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
                         {supp.notes && (
                           <div className="mt-0.5 text-[11px] text-slate-500 bg-amber-50/70 border border-amber-200/60 p-2 rounded-xl flex items-start gap-1.5">
                             <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
@@ -495,6 +656,51 @@ export const SuppliersModal: React.FC<SuppliersModalProps> = ({
                     className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:outline-none transition-colors"
                   />
                 </div>
+              </div>
+
+              {/* Senha de Acesso ao Portal do Fornecedor */}
+              <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+                    <Key className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Senha de Acesso ao Portal *</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newPass = generateSupplierPassword();
+                      setFormPassword(newPass);
+                      setShowFormPassword(true);
+                    }}
+                    className="px-2.5 py-1 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-[11px] font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                    title="Gerar automaticamente uma nova senha"
+                  >
+                    <Sparkles className="w-3 h-3 text-emerald-600" />
+                    <span>Gerar Senha</span>
+                  </button>
+                </div>
+
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-emerald-600 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type={showFormPassword ? 'text' : 'password'}
+                    value={formPassword}
+                    onChange={(e) => setFormPassword(e.target.value)}
+                    placeholder="Ex: 849201 ou senha personalizada"
+                    className="w-full pl-9 pr-10 py-2 text-xs font-mono font-bold bg-white border border-emerald-300 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-emerald-500 text-slate-900 transition-colors"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowFormPassword(!showFormPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+                    title={showFormPassword ? "Ocultar senha" : "Ver senha"}
+                  >
+                    {showFormPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-emerald-800/80 font-medium leading-relaxed">
+                  O fornecedor precisará do e-mail e desta senha para acessar a área de cotação e preencher os preços.
+                </p>
               </div>
 
               {/* Contato / Vendedor */}

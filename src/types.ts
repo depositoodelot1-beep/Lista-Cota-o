@@ -37,6 +37,7 @@ export interface Product {
   barcode?: string;
   notes?: string;
   imageUrl?: string;
+  selectedQuoteId?: string; // ID da cotação escolhida manualmente pelo usuário
   createdAt: string; // ISO string
   updatedAt?: string;
 }
@@ -49,6 +50,7 @@ export interface Supplier {
   name: string;
   phone: string;
   email: string;
+  password?: string; // Senha de acesso gerada pelo administrador para o portal de cotações
   contactPerson?: string;
   category?: string;
   notes?: string;
