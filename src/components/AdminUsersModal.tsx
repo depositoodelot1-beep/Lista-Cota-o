@@ -89,6 +89,11 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
   const [formError, setFormError] = useState<string | null>(null);
   const [isSavingUser, setIsSavingUser] = useState(false);
 
+  // Switch user auth state
+  const [selectedUserToSwitch, setSelectedUserToSwitch] = useState<AppUser | null>(null);
+  const [switchPassword, setSwitchPassword] = useState('');
+  const [switchError, setSwitchError] = useState<string | null>(null);
+
   if (!isOpen) return null;
 
   const isAdmin = currentUser.role === 'admin';
@@ -392,6 +397,7 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  setSelectedUserToSwitch(null);
                   setTab('users');
                   handleResetUserForm();
                 }}
@@ -405,6 +411,7 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
               <button
                 type="button"
                 onClick={() => {
+                  setSelectedUserToSwitch(null);
                   handleResetUserForm();
                   setTab('adduser');
                 }}
@@ -419,7 +426,10 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setTab('switch')}
+                onClick={() => {
+                  setSelectedUserToSwitch(null);
+                  setTab('switch');
+                }}
                 className={`px-2.5 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center ${
                   tab === 'switch' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
@@ -445,7 +455,10 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setTab('login')}
+                onClick={() => {
+                  setSelectedUserToSwitch(null);
+                  setTab('login');
+                }}
                 className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                   tab === 'login' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
@@ -455,7 +468,10 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setTab('switch')}
+                onClick={() => {
+                  setSelectedUserToSwitch(null);
+                  setTab('switch');
+                }}
                 className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                   tab === 'switch' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
@@ -778,51 +794,134 @@ export const AdminUsersModal: React.FC<AdminUsersModalProps> = ({
         {/* Tab 4: Switch Active User */}
         {tab === 'switch' && (
           <div className="mt-4 space-y-3">
-            <p className="text-xs text-slate-500 mb-2">
-              Selecione o funcionário atual para que novos produtos sejam automaticamente associados a você:
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto">
-              {users
-                .filter((u) => u.active)
-                .map((u) => {
-                  const isCurrent = currentUser.id === u.id;
-                  return (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => {
-                        onSwitchUser(u);
-                        onToast(`Conectado como ${u.name}`);
-                        onClose();
-                      }}
-                      className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
-                        isCurrent
-                          ? 'border-blue-500 bg-blue-50/50 shadow-xs'
-                          : 'border-slate-200/80 bg-white hover:border-slate-300'
-                      }`}
-                    >
-                      <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
-                        style={{
-                          borderColor: u.avatarColor,
-                          borderWidth: '2px',
-                          color: u.avatarColor,
-                          backgroundColor: `${u.avatarColor}15`,
-                        }}
-                      >
-                        {u.avatarInitial}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-bold text-slate-900 truncate">{u.name}</p>
-                        <p className="text-xs text-slate-400">
-                          {u.role === 'admin' ? 'Administrador' : 'Funcionário'}
-                        </p>
-                      </div>
-                      {isCurrent && <CheckCircle className="w-5 h-5 text-blue-600 shrink-0" />}
-                    </button>
-                  );
-                })}
-            </div>
+            {selectedUserToSwitch ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setSwitchError(null);
+                  const expectedPass = selectedUserToSwitch.password || '123';
+                  if (switchPassword.trim() === expectedPass.trim()) {
+                    onSwitchUser(selectedUserToSwitch);
+                    onToast(`Conectado como ${selectedUserToSwitch.name}`);
+                    setSelectedUserToSwitch(null);
+                    setSwitchPassword('');
+                    onClose();
+                  } else {
+                    setSwitchError('Senha incorreta para este usuário.');
+                  }
+                }}
+                className="space-y-4 max-w-sm mx-auto py-2"
+              >
+                <div className="text-center">
+                  <div
+                    className="w-14 h-14 rounded-full flex items-center justify-center font-bold text-xl mx-auto mb-2 shadow-sm"
+                    style={{
+                      borderColor: selectedUserToSwitch.avatarColor,
+                      borderWidth: '2px',
+                      color: selectedUserToSwitch.avatarColor,
+                      backgroundColor: `${selectedUserToSwitch.avatarColor}15`,
+                    }}
+                  >
+                    {selectedUserToSwitch.avatarInitial}
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900">Entrar como {selectedUserToSwitch.name}</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Digite a senha de acesso deste usuário</p>
+                </div>
+
+                {switchError && (
+                  <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{switchError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Senha de {selectedUserToSwitch.name}
+                  </label>
+                  <div className="relative">
+                    <Key className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="password"
+                      value={switchPassword}
+                      onChange={(e) => setSwitchPassword(e.target.value)}
+                      placeholder="Senha (padrão: 123)"
+                      autoFocus
+                      required
+                      className="w-full pl-10 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-900 focus:bg-white focus:border-blue-500 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedUserToSwitch(null);
+                      setSwitchPassword('');
+                      setSwitchError(null);
+                    }}
+                    className="w-1/2 py-2.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="submit"
+                    className="w-1/2 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm transition-all cursor-pointer"
+                  >
+                    Confirmar e Trocar
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <p className="text-xs text-slate-500 mb-2">
+                  Selecione o usuário para trocar de conta (será exigida a senha):
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-72 overflow-y-auto">
+                  {users
+                    .filter((u) => u.active)
+                    .map((u) => {
+                      const isCurrent = currentUser.id === u.id;
+                      return (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedUserToSwitch(u);
+                            setSwitchPassword('');
+                            setSwitchError(null);
+                          }}
+                          className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
+                            isCurrent
+                              ? 'border-blue-500 bg-blue-50/50 shadow-xs'
+                              : 'border-slate-200/80 bg-white hover:border-slate-300'
+                          }`}
+                        >
+                          <div
+                            className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shrink-0"
+                            style={{
+                              borderColor: u.avatarColor,
+                              borderWidth: '2px',
+                              color: u.avatarColor,
+                              backgroundColor: `${u.avatarColor}15`,
+                            }}
+                          >
+                            {u.avatarInitial}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-bold text-slate-900 truncate">{u.name}</p>
+                            <p className="text-xs text-slate-400">
+                              {u.role === 'admin' ? 'Administrador' : 'Funcionário'}
+                            </p>
+                          </div>
+                          {isCurrent && <CheckCircle className="w-5 h-5 text-blue-600 shrink-0" />}
+                        </button>
+                      );
+                    })}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
