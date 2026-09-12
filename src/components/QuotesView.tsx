@@ -926,9 +926,8 @@ export const QuotesView: React.FC<QuotesViewProps> = ({
                     const highestQuote = hasQuotes ? prodQuotes[prodQuotes.length - 1] : null;
                     const secondQuote = prodQuotes.length > 1 ? prodQuotes[1] : null;
 
-                    // Cálculo da economia: diferença entre a maior oferta e a menor oferta
-                    const maxSavings = highestQuote && lowestQuote ? (highestQuote.price - lowestQuote.price) : 0;
-                    const displayedSavings = maxSavings > 0 ? maxSavings : (secondQuote && lowestQuote ? secondQuote.price - lowestQuote.price : 4.0);
+                    // Cálculo da economia real: diferença entre a maior oferta e a menor oferta
+                    const maxSavings = (hasQuotes && prodQuotes.length > 1 && highestQuote && lowestQuote) ? (highestQuote.price - lowestQuote.price) : 0;
 
                     // Verifica se há escolha manual salva
                     const selectedQuoteId = prod.selectedQuoteId || (lowestQuote ? lowestQuote.id : '');
@@ -939,10 +938,12 @@ export const QuotesView: React.FC<QuotesViewProps> = ({
                         {/* Identificação do produto e pill de Economia */}
                         <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
                           <div className="flex items-center gap-2">
-                            <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-extrabold text-xs px-2.5 py-1 rounded-lg inline-flex items-center gap-1 shadow-2xs">
-                              Economia de R$ {displayedSavings.toFixed(2).replace('.', ',')}
-                            </span>
-                            {displayList.length > 1 && (
+                            {hasQuotes && maxSavings > 0 && (
+                              <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-extrabold text-xs px-2.5 py-1 rounded-lg inline-flex items-center gap-1 shadow-2xs">
+                                Economia de R$ {maxSavings.toFixed(2).replace('.', ',')}
+                              </span>
+                            )}
+                            {(displayList.length > 1 || !hasQuotes || maxSavings <= 0) && (
                               <h3 className="text-xs font-bold text-slate-800 truncate max-w-[180px] sm:max-w-[280px]" title={prod.name}>
                                 {prod.name}
                               </h3>

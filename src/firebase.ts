@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import localConfig from '../firebase-applet-config.json';
 
 // Support both environment variables (e.g. Vercel dashboard) and local config file
@@ -43,4 +44,5 @@ try {
 }
 
 export const db = dbInstance;
+export const auth = getAuth(app);
 export { app };

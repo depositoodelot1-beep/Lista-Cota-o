@@ -24,41 +24,11 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header id="app-header" className="bg-white px-5 pt-5 pb-3 border-b border-slate-100 shadow-xs z-10">
       <div className="w-full">
-        {/* Title and Item Count Pill directly matching Professional Polish Design */}
+        {/* Title and Action Buttons */}
         <div className="flex justify-between items-center mb-2">
           <h1 id="app-title" className="text-2xl font-bold text-slate-800 tracking-tight">
             Lista de Compras
           </h1>
-          <span
-            id="stat-to-buy-pill"
-            className="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide shrink-0"
-          >
-            {toBuyCount} {toBuyCount === 1 ? 'ITEM' : 'ITENS'}
-          </span>
-        </div>
-
-        {/* Sub-bar: Status Indicators & Quick Actions */}
-        <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span
-              id="cloud-status-badge"
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80"
-              title="Sincronização Firebase Ativa"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              Nuvem ON
-            </span>
-
-            {outOfStockCount > 0 && (
-              <span id="stat-out-of-stock" className="text-[11px] text-red-500 font-bold uppercase tracking-wider">
-                {outOfStockCount} esgotado{outOfStockCount > 1 ? 's' : ''}
-              </span>
-            )}
-
-            <span className="text-[11px] text-slate-400 inline-flex items-center gap-1 font-medium">
-              Por: <span className="text-blue-600 font-semibold">{currentUser.name}</span>
-            </span>
-          </div>
 
           {/* Action icon buttons styled with Professional Polish slate-100 & rounded-xl */}
           <div className="flex items-center gap-1.5 shrink-0">
@@ -88,6 +58,24 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Settings className="w-4 h-4" />
             </button>
+          </div>
+        </div>
+
+        {/* Sub-bar: Status Indicators & Quick Actions */}
+        <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              id="cloud-status-badge"
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/80"
+              title="Sincronização Firebase Ativa"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              Nuvem ON
+            </span>
+
+            <span className="text-[11px] text-slate-400 inline-flex items-center gap-1 font-medium">
+              Por: <span className="text-blue-600 font-semibold">{currentUser.name}</span>
+            </span>
           </div>
         </div>
       </div>

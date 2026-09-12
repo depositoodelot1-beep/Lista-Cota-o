@@ -43,7 +43,7 @@ export const SupplierQuoteModal: React.FC<SupplierQuoteModalProps> = ({
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
   const [customSupplierName, setCustomSupplierName] = useState('');
   const [supplierPhone, setSupplierPhone] = useState('');
-  const [priceInput, setPriceInput] = useState('');
+  const [priceCents, setPriceCents] = useState<number>(0);
   const [quantityInput, setQuantityInput] = useState('');
   const [unit, setUnit] = useState('un');
   const [brand, setBrand] = useState('');
@@ -63,7 +63,7 @@ export const SupplierQuoteModal: React.FC<SupplierQuoteModalProps> = ({
       setSelectedSupplierId(existingQuote.supplierId || 'custom');
       setCustomSupplierName(existingQuote.supplierName || '');
       setSupplierPhone(existingQuote.supplierPhone || '');
-      setPriceInput(existingQuote.price ? existingQuote.price.toFixed(2).replace('.', ',') : '');
+      setPriceCents(existingQuote.price ? Math.round(existingQuote.price * 100) : 0);
       setQuantityInput(String(existingQuote.quantity || product.quantity || 1));
       setUnit(existingQuote.unit || product.unit || 'un');
       setBrand(existingQuote.brand || product.brand || '');
@@ -88,7 +88,7 @@ export const SupplierQuoteModal: React.FC<SupplierQuoteModalProps> = ({
         setSupplierPhone('');
       }
 
-      setPriceInput('');
+      setPriceCents(0);
       setQuantityInput(String(product.quantity || 1));
       setUnit(product.unit || 'un');
       setBrand(product.brand || '');
@@ -119,7 +119,7 @@ export const SupplierQuoteModal: React.FC<SupplierQuoteModalProps> = ({
     }
   };
 
-  const parsedPrice = parseFloat(priceInput.replace(',', '.'));
+  const parsedPrice = priceCents / 100;
   const parsedQuantity = parseFloat(quantityInput);
   const calculatedTotal =
     !isNaN(parsedPrice) && !isNaN(parsedQuantity) && parsedPrice > 0 && parsedQuantity > 0
@@ -311,13 +311,13 @@ export const SupplierQuoteModal: React.FC<SupplierQuoteModalProps> = ({
                 </span>
                 <input
                   type="text"
-                  inputMode="decimal"
+                  inputMode="numeric"
                   placeholder="0,00"
-                  value={priceInput}
+                  value={(priceCents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   onChange={(e) => {
-                    // Allow numbers, comma, dot
-                    const val = e.target.value.replace(/[^0-9.,]/g, '');
-                    setPriceInput(val);
+                    const digits = e.target.value.replace(/\D/g, '');
+                    const cents = digits === '' ? 0 : parseInt(digits, 10);
+                    setPriceCents(cents);
                   }}
                   className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all"
                   required
@@ -391,7 +391,7 @@ export const SupplierQuoteModal: React.FC<SupplierQuoteModalProps> = ({
                   Total da Proposta:
                 </span>
                 <p className="text-xs text-emerald-700">
-                  {quantityInput} {unit} × R$ {priceInput}
+                  {quantityInput} {unit} × R$ {(priceCents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
               <span className="text-lg font-black text-emerald-700">

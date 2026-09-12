@@ -458,13 +458,16 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
                           Prioridade:
                           {(() => {
                             const u = normalizeUrgency(product.urgency);
+                            if (u === 'fixo') {
+                              return <span className="font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded text-[10px]">FIXO</span>;
+                            }
                             if (u === 'novo') {
                               return <span className="font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded text-[10px]">NOVO</span>;
                             }
                             if (u === 'urgente') {
                               return <span className="font-bold text-red-700 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded text-[10px]">URGENTE</span>;
                             }
-                            return <span className="font-bold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded text-[10px]">NORMAL</span>;
+                            return <span className="font-bold text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.5 rounded text-[10px]">COTAÇÃO</span>;
                           })()}
                         </span>
 
@@ -611,7 +614,7 @@ export const ProductCatalogModal: React.FC<ProductCatalogModalProps> = ({
               <div className="grid grid-cols-3 gap-1.5">
                 {[
                   { key: 'novo', label: 'NOVO', activeClass: 'bg-emerald-600 text-white shadow-xs', hoverClass: 'hover:bg-emerald-50 hover:text-emerald-700' },
-                  { key: 'normal', label: 'NORMAL', activeClass: 'bg-amber-400 text-amber-950 font-bold shadow-xs', hoverClass: 'hover:bg-amber-50 hover:text-amber-800' },
+                  { key: 'normal', label: 'COTAÇÃO', activeClass: 'bg-amber-400 text-amber-950 font-bold shadow-xs', hoverClass: 'hover:bg-amber-50 hover:text-amber-800' },
                   { key: 'urgente', label: 'URGENTE', activeClass: 'bg-red-600 text-white shadow-xs', hoverClass: 'hover:bg-red-50 hover:text-red-700' },
                 ].map((u) => (
                   <button

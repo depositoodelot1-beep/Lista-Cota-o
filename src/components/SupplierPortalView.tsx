@@ -19,6 +19,7 @@ import {
   HelpCircle,
   Mail,
   LogOut,
+  Camera,
 } from 'lucide-react';
 import { Product, Supplier, SupplierQuote } from '../types';
 import { normalizeSearchText } from '../utils/text';
@@ -61,9 +62,10 @@ export const SupplierPortalView: React.FC<SupplierPortalViewProps> = ({
 
   // Currently editing product ID (for inline quick form)
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
 
   // Form values for the actively edited item
-  const [formPrice, setFormPrice] = useState('');
+  const [formPriceCents, setFormPriceCents] = useState<number>(0);
   const [formQuantity, setFormQuantity] = useState('');
   const [formUnit, setFormUnit] = useState('un');
   const [formBrand, setFormBrand] = useState('');
@@ -138,13 +140,13 @@ export const SupplierPortalView: React.FC<SupplierPortalViewProps> = ({
     setEditingProductId(product.id);
 
     if (existing) {
-      setFormPrice(existing.price ? existing.price.toFixed(2).replace('.', ',') : '');
+      setFormPriceCents(existing.price ? Math.round(existing.price * 100) : 0);
       setFormQuantity(String(existing.quantity || product.quantity || 1));
       setFormUnit(existing.unit || product.unit || 'un');
       setFormBrand(existing.brand || product.brand || '');
       setFormNotes(existing.notes || '');
     } else {
-      setFormPrice('');
+      setFormPriceCents(0);
       setFormQuantity(String(product.quantity || 1));
       setFormUnit(product.unit || 'un');
       setFormBrand(product.brand || '');
@@ -155,7 +157,7 @@ export const SupplierPortalView: React.FC<SupplierPortalViewProps> = ({
   // Cancel edit
   const handleCancelEdit = () => {
     setEditingProductId(null);
-    setFormPrice('');
+    setFormPriceCents(0);
     setFormQuantity('');
     setFormBrand('');
     setFormNotes('');
@@ -163,8 +165,7 @@ export const SupplierPortalView: React.FC<SupplierPortalViewProps> = ({
 
   // Save the quote
   const handleSaveItem = async (product: Product) => {
-    const cleanPriceStr = formPrice.replace(',', '.').trim();
-    const priceNum = parseFloat(cleanPriceStr);
+    const priceNum = formPriceCents / 100;
 
     if (isNaN(priceNum) || priceNum <= 0) {
       onToast('Preço obrigatório', 'Informe um valor unitário maior que zero.', 'error');
@@ -420,36 +421,59 @@ export const SupplierPortalView: React.FC<SupplierPortalViewProps> = ({
                   isQuoted ? 'border-emerald-300/90' : 'border-slate-200'
                 }`}
               >
-                {/* Product Header: Title + Requested Brand + Status */}
-                <div className="flex items-start justify-between gap-2 mb-1.5">
-                  <div>
-                    <h3 className="text-base font-extrabold text-slate-900 tracking-tight leading-snug">
-                      {product.name}
-                    </h3>
-                    <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 flex-wrap">
-                      <span>
-                        Necessidade da loja: <strong className="text-slate-800">{product.quantity} {product.unit}</strong>
-                      </span>
-                      {product.brand && (
-                        <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[11px] font-medium border border-slate-200/60">
-                          Ref: {product.brand}
-                        </span>
-                      )}
+                {/* Product Header: Image + Title + Requested Brand + Status */}
+                <div className="flex items-start gap-3 mb-1.5">
+                  {product.imageUrl ? (
+                    <div
+                      onClick={() => setViewingPhotoUrl(product.imageUrl || null)}
+                      className="relative w-14 h-14 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 shrink-0 shadow-2xs cursor-pointer group"
+                      title="Clique para ampliar a foto"
+                    >
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                      <div className="absolute inset-0 bg-slate-950/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                        <Camera className="w-4 h-4" />
+                      </div>
                     </div>
-                  </div>
-
-                  {/* Status Badge */}
-                  {isQuoted ? (
-                    <span className="shrink-0 bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-xs px-2.5 py-1 rounded-full flex items-center gap-1 shadow-2xs">
-                      <Check className="w-3.5 h-3.5 text-emerald-700" />
-                      <span>Cotado</span>
-                    </span>
                   ) : (
-                    <span className="shrink-0 bg-amber-50 text-amber-800 border border-amber-200 font-bold text-xs px-2.5 py-1 rounded-full flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Aguardando</span>
-                    </span>
+                    <div
+                      className="w-14 h-14 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex items-center justify-center text-slate-400 shrink-0 shadow-2xs"
+                      title="Sem foto do produto"
+                    >
+                      <Camera className="w-5 h-5 text-slate-300" />
+                    </div>
                   )}
+
+                  <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
+                    <div>
+                      <h3 className="text-base font-extrabold text-slate-900 tracking-tight leading-snug">
+                        {product.name}
+                      </h3>
+                      <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500 flex-wrap">
+                        {product.brand && (
+                          <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[11px] font-medium border border-slate-200/60">
+                            Ref: {product.brand}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Status Badge */}
+                    {isQuoted ? (
+                      <span className="shrink-0 bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-xs px-2.5 py-1 rounded-full flex items-center gap-1 shadow-2xs">
+                        <Check className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>Cotado</span>
+                      </span>
+                    ) : (
+                      <span className="shrink-0 bg-amber-50 text-amber-800 border border-amber-200 font-bold text-xs px-2.5 py-1 rounded-full flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Aguardando</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Store Notes if available */}
@@ -488,8 +512,13 @@ export const SupplierPortalView: React.FC<SupplierPortalViewProps> = ({
                           </span>
                           <input
                             type="text"
-                            value={formPrice}
-                            onChange={(e) => setFormPrice(e.target.value)}
+                            inputMode="numeric"
+                            value={(formPriceCents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            onChange={(e) => {
+                              const digits = e.target.value.replace(/\D/g, '');
+                              const cents = digits === '' ? 0 : parseInt(digits, 10);
+                              setFormPriceCents(cents);
+                            }}
                             placeholder="0,00"
                             className="w-full bg-white text-slate-900 font-black text-sm pl-8 pr-2.5 py-2 rounded-lg border border-slate-300 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
                             autoFocus
@@ -604,16 +633,13 @@ export const SupplierPortalView: React.FC<SupplierPortalViewProps> = ({
                   </div>
                 ) : (
                   /* Display pending button to enter price */
-                  <div className="mt-2.5 flex items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200/60">
-                    <span className="text-xs text-slate-500 font-medium">
-                      Lance o seu valor e a marca disponível
-                    </span>
+                  <div className="mt-2.5 flex items-center justify-end gap-2 pt-1">
                     <button
                       type="button"
                       onClick={() => handleStartEdit(product)}
-                      className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-black rounded-lg flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer shrink-0"
+                      className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white text-xs font-black rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                     >
-                      <DollarSign className="w-3.5 h-3.5" />
+                      <DollarSign className="w-4 h-4" />
                       <span>Lançar Preço</span>
                     </button>
                   </div>
@@ -691,6 +717,29 @@ export const SupplierPortalView: React.FC<SupplierPortalViewProps> = ({
             >
               Entendido
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Photo Modal */}
+      {viewingPhotoUrl && (
+        <div
+          className="fixed inset-0 bg-slate-950/80 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setViewingPhotoUrl(null)}
+        >
+          <div className="relative max-w-lg w-full bg-white rounded-3xl overflow-hidden shadow-2xl p-3" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              onClick={() => setViewingPhotoUrl(null)}
+              className="absolute top-5 right-5 bg-slate-900/70 hover:bg-slate-900 text-white p-2 rounded-full transition-colors z-10 cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img
+              src={viewingPhotoUrl}
+              alt="Foto do produto"
+              className="w-full h-auto max-h-[80vh] object-contain rounded-2xl"
+            />
           </div>
         </div>
       )}

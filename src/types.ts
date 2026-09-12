@@ -14,9 +14,10 @@ export interface AppUser {
 
 export type ProductStatus = 'em_falta' | 'baixo_estoque' | 'comprado';
 
-export type ProductUrgency = 'novo' | 'normal' | 'urgente';
+export type ProductUrgency = 'fixo' | 'novo' | 'normal' | 'urgente';
 
 export function normalizeUrgency(urgency?: string): ProductUrgency {
+  if (urgency === 'fixo') return 'fixo';
   if (urgency === 'novo' || urgency === 'baixa') return 'novo';
   if (urgency === 'urgente' || urgency === 'alta') return 'urgente';
   return 'normal';

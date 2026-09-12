@@ -1,12 +1,13 @@
 import React from 'react';
 
-export type UrgencyFilterType = 'all' | 'novo' | 'normal' | 'urgente';
+export type UrgencyFilterType = 'all' | 'fixo' | 'novo' | 'normal' | 'urgente';
 
 interface PriorityFilterProps {
   selectedUrgency: UrgencyFilterType;
   onSelectUrgency: (urgency: UrgencyFilterType) => void;
   counts: {
     all: number;
+    fixo: number;
     novo: number;
     normal: number;
     urgente: number;
@@ -39,6 +40,16 @@ export const PriorityFilter: React.FC<PriorityFilterProps> = ({
       countInactive: 'text-slate-400',
     },
     {
+      id: 'fixo',
+      letter: 'F',
+      fullName: 'Fixo',
+      count: counts.fixo,
+      activeClasses: 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-300/60',
+      inactiveClasses: 'bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100',
+      countActive: 'text-indigo-100',
+      countInactive: 'text-indigo-600',
+    },
+    {
       id: 'novo',
       letter: 'N',
       fullName: 'Novo',
@@ -50,8 +61,8 @@ export const PriorityFilter: React.FC<PriorityFilterProps> = ({
     },
     {
       id: 'normal',
-      letter: 'M',
-      fullName: 'Normal',
+      letter: 'C',
+      fullName: 'Cotação',
       count: counts.normal,
       activeClasses: 'bg-amber-400 text-amber-950 font-bold shadow-xs ring-2 ring-amber-300/60',
       inactiveClasses: 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100',
@@ -72,7 +83,7 @@ export const PriorityFilter: React.FC<PriorityFilterProps> = ({
 
   return (
     <div id="priority-filter-section" className="px-4 sm:px-5 py-2.5 bg-slate-50/90 border-b border-slate-100">
-      <div className="grid grid-cols-4 gap-1.5 sm:gap-2 w-full">
+      <div className="grid grid-cols-5 gap-1 sm:gap-2 w-full">
         {allPriorities.map((item) => {
           const isSelected = selectedUrgency === item.id;
           return (

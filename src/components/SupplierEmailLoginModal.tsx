@@ -15,6 +15,8 @@ import {
   Key,
 } from 'lucide-react';
 import { Supplier } from '../types';
+import { auth } from '../firebase';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 interface SupplierEmailLoginModalProps {
   isOpen: boolean;
@@ -49,6 +51,48 @@ export const SupplierEmailLoginModal: React.FC<SupplierEmailLoginModalProps> = (
   const matchedSupplier = cleanEmail
     ? suppliers.find((s) => s.email?.trim().toLowerCase() === cleanEmail)
     : null;
+
+  const handleGoogleLogin = async () => {
+    setErrorMsg(null);
+    setIsLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      const googleEmail = user.email?.trim().toLowerCase();
+
+      if (!googleEmail) {
+        setErrorMsg('A conta Google não possui um e-mail válido.');
+        setIsLoading(false);
+        return;
+      }
+
+      const found = suppliers.find((s) => s.email?.trim().toLowerCase() === googleEmail);
+      if (found) {
+        onLoginSupplier(found);
+        onToast('Acesso com Google!', `Bem-vindo de volta, ${found.name}.`, 'success');
+        onClose();
+      } else {
+        const newSupplier = await onRegisterAndLoginSupplier({
+          name: user.displayName || 'Fornecedor Google',
+          email: googleEmail,
+          phone: user.phoneNumber || '',
+          contactPerson: user.displayName || 'Representante',
+          category: 'Fornecedor',
+          notes: 'Cadastrado via Google Sign-In',
+          createdAt: new Date().toISOString(),
+        });
+        onLoginSupplier(newSupplier);
+        onToast('Conta Cadastrada!', `Empresa ${newSupplier.name} conectada via Google.`, 'success');
+        onClose();
+      }
+    } catch (err: any) {
+      console.error('Google login error:', err);
+      setErrorMsg(err?.message || 'Falha ao autenticar com Google. Tente novamente.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -170,6 +214,28 @@ export const SupplierEmailLoginModal: React.FC<SupplierEmailLoginModalProps> = (
               <span className="leading-relaxed">{errorMsg}</span>
             </div>
           )}
+
+          {/* Botão de Login com Google */}
+          <button
+            type="button"
+            onClick={handleGoogleLogin}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center gap-3 py-3 px-4 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm rounded-2xl border border-slate-300 shadow-xs transition-all cursor-pointer active:scale-98 disabled:opacity-50"
+          >
+            <svg className="w-5 h-5" viewBox="0 0 24 24">
+              <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
+              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.19v3.15C3.17 21.32 7.22 24 12 24z"/>
+              <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.19C.43 8.1 0 9.8 0 12s.43 3.9 1.19 5.42l4.09-3.15z"/>
+              <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.22 0 3.17 2.68 1.19 6.58l4.09 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
+            </svg>
+            <span>Entrar com o Google</span>
+          </button>
+
+          <div className="flex items-center my-2">
+            <div className="flex-grow border-t border-slate-200"></div>
+            <span className="px-3 text-xs text-slate-400 font-semibold uppercase">ou com senha</span>
+            <div className="flex-grow border-t border-slate-200"></div>
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Input E-mail */}

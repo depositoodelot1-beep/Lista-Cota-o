@@ -6,8 +6,6 @@ import {
   Plus,
   Minus,
   AlertCircle,
-  ChevronDown,
-  ChevronUp,
   Package,
   CheckCircle2,
   Search,
@@ -63,7 +61,6 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [saveDestination, setSaveDestination] = useState<'both' | 'database_only'>('both');
-  const [showMoreDetails, setShowMoreDetails] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -95,7 +92,6 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
       setSelectedDatabaseProduct(productToEdit);
       setSaveDestination('both');
       if (productToEdit.brand || productToEdit.notes || productToEdit.barcode) {
-        setShowMoreDetails(true);
       }
     } else {
       setName('');
@@ -108,7 +104,6 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
       setNotes('');
       setImageUrl('');
       setSaveDestination('both');
-      setShowMoreDetails(Boolean(initialBarcode));
       setSelectedDatabaseProduct(null);
       if (initialBarcode) {
         setBarcodeScanNotification({
@@ -177,9 +172,6 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
     if (prod.barcode) setBarcode(prod.barcode);
     if (prod.notes) setNotes(prod.notes);
     if (prod.imageUrl) setImageUrl(prod.imageUrl);
-    if (prod.brand || prod.notes || prod.barcode) {
-      setShowMoreDetails(true);
-    }
     setSelectedDatabaseProduct(prod);
     setIsDropdownOpen(false);
     setError(null);
@@ -241,7 +233,6 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
           type: 'new',
           code: cleanCode,
         });
-        setShowMoreDetails(true);
       }
     }
   };
@@ -340,9 +331,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
             <h2 id="modal-product-title" className="text-xl font-extrabold text-slate-900 tracking-tight">
               {productToEdit ? 'Editar Produto' : 'Novo Produto'}
             </h2>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Preencha os dados do item para a lista
-            </p>
+
           </div>
           <button
             id="btn-close-product-modal"
@@ -367,25 +356,74 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
 
         {/* Form Body matching Screenshot */}
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
-          {/* 1. QUEM ESTÁ ADICIONANDO */}
+          {/* PRIORIDADE (NOVO = Verde, COTAÇÃO = Amarelo, URGENTE = Vermelho) */}
+          <div>
+            <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+              PRIORIDADE
+            </span>
+
+            {/* 4 Opções de Prioridade: FIXO, NOVO, COTAÇÃO e URGENTE */}
+            <div className="grid grid-cols-4 gap-1 p-1 bg-slate-100/80 rounded-2xl">
+              <button
+                id="btn-priority-fixo"
+                type="button"
+                onClick={() => setUrgency('fixo')}
+                className={`py-2 text-[11px] font-bold rounded-xl transition-all cursor-pointer truncate px-1 ${
+                  urgency === 'fixo'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-indigo-700 hover:bg-indigo-50'
+                }`}
+              >
+                FIXO
+              </button>
+              <button
+                id="btn-priority-novo"
+                type="button"
+                onClick={() => setUrgency('novo')}
+                className={`py-2 text-[11px] font-bold rounded-xl transition-all cursor-pointer truncate px-1 ${
+                  urgency === 'novo'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-emerald-700 hover:bg-emerald-50'
+                }`}
+              >
+                NOVO
+              </button>
+              <button
+                id="btn-priority-normal"
+                type="button"
+                onClick={() => setUrgency('normal')}
+                className={`py-2 text-[11px] font-bold rounded-xl transition-all cursor-pointer truncate px-1 ${
+                  urgency === 'normal'
+                    ? 'bg-amber-400 text-amber-950 shadow-xs'
+                    : 'text-slate-600 hover:text-amber-800 hover:bg-amber-50'
+                }`}
+              >
+                COTAÇÃO
+              </button>
+              <button
+                id="btn-priority-urgente"
+                type="button"
+                onClick={() => setUrgency('urgente')}
+                className={`py-2 text-[11px] font-bold rounded-xl transition-all cursor-pointer truncate px-1 ${
+                  urgency === 'urgente'
+                    ? 'bg-red-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-red-700 hover:bg-red-50'
+                }`}
+              >
+                URGENTE
+              </button>
+            </div>
+          </div>
+
+          {/* QUEM ESTÁ ADICIONANDO */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                1. QUEM ESTÁ ADICIONANDO
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Quem está adicionando
               </span>
-              {onOpenUserManager && (
-                <button
-                  type="button"
-                  onClick={onOpenUserManager}
-                  className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
-                >
-                  <UserPlus className="w-3 h-3" />
-                  <span>+ Novo Usuário</span>
-                </button>
-              )}
             </div>
 
-            {/* Avatars Row matching Screenshot */}
+            {/* Avatars Row */}
             <div className="flex items-center gap-2.5 overflow-x-auto pb-1 no-scrollbar">
               {users
                 .filter((u) => u.active)
@@ -401,7 +439,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
                       onClick={() => setResponsibleId(u.id)}
                       className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm transition-all shrink-0 cursor-pointer ${
                         isSelected
-                          ? 'bg-blue-600 text-white shadow-sm scale-105'
+                          ? 'bg-blue-600 text-white shadow-sm scale-105 ring-2 ring-blue-600 ring-offset-1'
                           : 'hover:scale-105 active:scale-95'
                       }`}
                       style={{
@@ -433,14 +471,44 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
             </div>
           </div>
 
-          {/* 2. NOME DO PRODUTO com busca em tempo real na base de dados e Leitor de Código de Barras */}
+          {/* 2. CÓDIGO DE BARRAS */}
+          <div>
+            <div className="mb-1.5">
+              <label
+                htmlFor="input-modal-barcode-top"
+                className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider"
+              >
+                2. CÓDIGO DE BARRAS
+              </label>
+            </div>
+            <div className="relative">
+              <input
+                id="input-modal-barcode-top"
+                type="text"
+                value={barcode}
+                onChange={(e) => setBarcode(e.target.value)}
+                placeholder="Ex: 7891000100103"
+                className="w-full pl-3 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-hidden focus:border-blue-500"
+              />
+              <button
+                type="button"
+                onClick={() => setIsScannerOpen(true)}
+                title="Escanear com a câmera"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-blue-600 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <ScanBarcode className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* 3. NOME DO PRODUTO com busca em tempo real na base de dados */}
           <div className="relative" ref={dropdownRef}>
             <div className="flex items-center justify-between mb-1.5 gap-2">
               <label
                 htmlFor="input-modal-product-name"
                 className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider truncate"
               >
-                2. NOME DO PRODUTO
+                3. NOME DO PRODUTO
               </label>
 
               <div className="flex items-center gap-1.5 shrink-0">
@@ -449,15 +517,6 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
                     {matchingProducts.length} na base
                   </span>
                 )}
-                <button
-                  type="button"
-                  onClick={() => setIsScannerOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-blue-50 hover:bg-blue-100 active:scale-95 text-blue-700 text-xs font-bold border border-blue-200/80 transition-all cursor-pointer shadow-2xs"
-                  title="Abrir leitor de código de barras pela câmera ou leitor USB"
-                >
-                  <ScanBarcode className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Código de Barras</span>
-                </button>
               </div>
             </div>
 
@@ -645,7 +704,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
                             <span>Unidade: {prod.unit || 'unidade'}</span>
                             <span>•</span>
                             <span className="capitalize">
-                              Prioridade: {normalizeUrgency(prod.urgency) === 'urgente' ? 'Urgente' : normalizeUrgency(prod.urgency) === 'novo' ? 'Novo' : 'Normal'}
+                              Prioridade: {normalizeUrgency(prod.urgency) === 'urgente' ? 'Urgente' : normalizeUrgency(prod.urgency) === 'novo' ? 'Novo' : 'Cotação'}
                             </span>
                           </div>
                         </div>
@@ -698,11 +757,11 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
             )}
           </div>
 
-          {/* 3. QUANTIDADE */}
+          {/* 4. QUANTIDADE */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                3. QUANTIDADE
+                4. QUANTIDADE
               </span>
               <select
                 value={unit}
@@ -721,20 +780,20 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
             </div>
 
             {/* Stepper Card matching Screenshot with Typable Number */}
-            <div className="flex items-center justify-between p-3 bg-slate-50/80 rounded-2xl border border-slate-100">
+            <div className="flex items-center justify-between py-1.5 px-3 bg-slate-50/80 rounded-2xl border border-slate-100">
               {/* Minus Button */}
               <button
                 type="button"
                 onClick={handleDecrement}
                 disabled={quantity === '' || Number(quantity) <= 0}
-                className="w-11 h-11 flex items-center justify-center text-slate-400 hover:text-slate-700 disabled:opacity-30 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer text-xl font-medium"
+                className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-700 disabled:opacity-30 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer text-lg font-medium"
                 aria-label="Diminuir quantidade"
               >
-                <Minus className="w-5 h-5" />
+                <Minus className="w-4 h-4" />
               </button>
 
               {/* Number (editable input) and Unit in Center */}
-              <div className="flex flex-col items-center justify-center">
+              <div className="flex items-center gap-1.5 justify-center">
                 <input
                   id="input-product-quantity"
                   type="number"
@@ -758,7 +817,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
                       setQuantity(1);
                     }
                   }}
-                  className="w-24 text-center text-3xl font-extrabold text-blue-600 leading-none bg-transparent hover:bg-blue-50/50 focus:bg-blue-50/80 focus:outline-hidden rounded-xl transition-all py-1 px-1 cursor-text select-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="w-16 text-center text-xl font-extrabold text-blue-600 leading-none bg-transparent hover:bg-blue-50/50 focus:bg-blue-50/80 focus:outline-hidden rounded-xl transition-all py-0.5 px-1 cursor-text select-all [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   aria-label="Quantidade do produto"
                   title="Clique para digitar o número diretamente"
                 />
@@ -771,66 +830,19 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
               <button
                 type="button"
                 onClick={handleIncrement}
-                className="w-11 h-11 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-full flex items-center justify-center shadow-md shadow-blue-500/25 transition-all cursor-pointer text-lg font-bold"
+                className="w-8 h-8 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-full flex items-center justify-center shadow-md shadow-blue-500/25 transition-all cursor-pointer text-base font-bold"
                 aria-label="Aumentar quantidade"
               >
-                <Plus className="w-5 h-5" />
+                <Plus className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          {/* 4. PRIORIDADE (NOVO = Verde, NORMAL = Amarelo, URGENTE = Vermelho) */}
-          <div>
-            <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-              4. PRIORIDADE
-            </span>
-
-            {/* 3 Opções de Prioridade: NOVO (Verde), NORMAL (Amarelo) e URGENTE (Vermelho) */}
-            <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100/80 rounded-2xl">
-              <button
-                id="btn-priority-novo"
-                type="button"
-                onClick={() => setUrgency('novo')}
-                className={`py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                  urgency === 'novo'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-emerald-700 hover:bg-emerald-50'
-                }`}
-              >
-                NOVO
-              </button>
-              <button
-                id="btn-priority-normal"
-                type="button"
-                onClick={() => setUrgency('normal')}
-                className={`py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                  urgency === 'normal'
-                    ? 'bg-amber-400 text-amber-950 shadow-xs'
-                    : 'text-slate-600 hover:text-amber-800 hover:bg-amber-50'
-                }`}
-              >
-                NORMAL
-              </button>
-              <button
-                id="btn-priority-urgente"
-                type="button"
-                onClick={() => setUrgency('urgente')}
-                className={`py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-                  urgency === 'urgente'
-                    ? 'bg-red-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-red-700 hover:bg-red-50'
-                }`}
-              >
-                URGENTE
-              </button>
-            </div>
-          </div>
-
-          {/* 5. FOTO DO PRODUTO (Câmera do Celular / Galeria) */}
+          {/* 6. FOTO DO PRODUTO (Compacta com Câmera e Galeria) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                5. FOTO DO PRODUTO <span className="text-[9px] font-normal text-slate-400 normal-case">(Opcional)</span>
+                6. FOTO DO PRODUTO <span className="text-[9px] font-normal text-slate-400 normal-case">(Opcional)</span>
               </span>
               {imageUrl && (
                 <button
@@ -844,7 +856,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
               )}
             </div>
 
-            {/* Inputs nativos ocultos (um com capture='environment' para abrir a câmera diretamente no celular) */}
+            {/* Inputs nativos ocultos */}
             <input
               ref={cameraInputRef}
               type="file"
@@ -861,205 +873,114 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({
               onChange={handlePhotoCapture}
             />
 
-            {imageUrl ? (
-              <div className="p-2.5 bg-slate-50/90 rounded-2xl border border-slate-200/80 flex items-center gap-3">
-                {/* Thumbnail clicável para ampliar */}
+            {isCompressingPhoto ? (
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-center gap-2 text-blue-600">
+                <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <span className="text-xs font-semibold text-slate-600">Comprimindo foto...</span>
+              </div>
+            ) : imageUrl ? (
+              <div className="p-2 bg-slate-50/90 rounded-2xl border border-slate-200 flex items-center gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsViewingPhotoModal(true)}
-                  className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden border border-slate-200 bg-white shrink-0 shadow-2xs group cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  title="Clique para ver a foto ampliada"
+                  className="relative w-12 h-12 rounded-xl overflow-hidden border border-slate-200 bg-white shrink-0 shadow-2xs group cursor-pointer"
+                  title="Ampliar foto"
                 >
                   <img
                     src={imageUrl}
-                    alt={name || 'Foto do produto'}
+                    alt={name || 'Foto'}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                   />
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 flex items-center justify-center transition-colors">
-                    <ZoomIn className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 drop-shadow-sm transition-opacity" />
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-colors">
+                    <ZoomIn className="w-3.5 h-3.5 text-white opacity-0 group-hover:opacity-100" />
                   </div>
                 </button>
 
-                <div className="min-w-0 flex-1 space-y-1.5">
-                  <div className="flex items-center gap-1.5 text-emerald-700 text-xs font-bold">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Foto anexada com sucesso</span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 leading-tight">
-                    A foto ajudará a equipe a reconhecer a embalagem exata do produto.
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>Foto anexada</span>
                   </p>
-                  <div className="flex items-center gap-2 pt-0.5">
-                    <button
-                      type="button"
-                      onClick={() => cameraInputRef.current?.click()}
-                      className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <Camera className="w-3 h-3" />
-                      <span>Tirar outra</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 hover:text-slate-800 bg-slate-200/60 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                    >
-                      <ImageIcon className="w-3 h-3" />
-                      <span>Galeria</span>
-                    </button>
-                  </div>
+                  <p className="text-[10px] text-slate-400 truncate">Clique na miniatura para ver maior</p>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="p-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl transition-colors cursor-pointer"
+                    title="Tirar outra foto"
+                  >
+                    <Camera className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-colors cursor-pointer"
+                    title="Escolher da galeria"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ) : (
-              <div className="p-3 bg-slate-50/80 rounded-2xl border border-dashed border-slate-200 hover:border-blue-400/60 transition-colors">
-                {isCompressingPhoto ? (
-                  <div className="flex flex-col items-center justify-center py-3 space-y-2 text-blue-600">
-                    <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-xs font-semibold text-slate-600">Comprimindo foto para envio rápido...</span>
-                  </div>
-                ) : (
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600 shrink-0">
-                        <Camera className="w-5 h-5" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-800">
-                          Foto da embalagem / produto
-                        </p>
-                        <p className="text-[11px] text-slate-400 truncate">
-                          Tire uma foto para ajudar a reconhecer o item
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        id="btn-take-product-photo"
-                        type="button"
-                        onClick={() => cameraInputRef.current?.click()}
-                        className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-all"
-                      >
-                        <Camera className="w-3.5 h-3.5" />
-                        <span>Câmera do Celular</span>
-                      </button>
-                      <button
-                        id="btn-upload-product-photo"
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="inline-flex items-center justify-center gap-1 px-2.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium cursor-pointer transition-colors"
-                        title="Escolher foto da galeria"
-                      >
-                        <ImageIcon className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Galeria</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Opcional: Detalhes extras (Marca, Observações) recolhível para manter o visual limpo */}
-          <div className="pt-1">
-            <button
-              type="button"
-              onClick={() => setShowMoreDetails(!showMoreDetails)}
-              className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 flex items-center gap-1 cursor-pointer transition-colors mx-auto py-0.5"
-            >
-              <span>{showMoreDetails ? 'Menos opções' : '+ Mais opções (Marca, Observação)'}</span>
-              {showMoreDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            </button>
-
-            {showMoreDetails && (
-              <div className="space-y-2.5 mt-2 pt-2 border-t border-slate-100 animate-in fade-in duration-150">
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label
-                      htmlFor="input-modal-barcode"
-                      className="block text-[10px] font-bold text-slate-500 uppercase"
-                    >
-                      Código de Barras (EAN / UPC)
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setIsScannerOpen(true)}
-                      className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1 cursor-pointer"
-                    >
-                      <ScanBarcode className="w-3 h-3" />
-                      <span>Escanear câmera</span>
-                    </button>
-                  </div>
-                  <div className="relative">
-                    <input
-                      id="input-modal-barcode"
-                      type="text"
-                      value={barcode}
-                      onChange={(e) => setBarcode(e.target.value)}
-                      placeholder="Ex: 7891000100103"
-                      className="w-full pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-hidden focus:border-blue-500"
-                    />
-                    <Barcode className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  </div>
-                </div>
-
-                <div>
-                  <label
-                    htmlFor="input-modal-notes"
-                    className="block text-[10px] font-bold text-slate-500 uppercase mb-1"
+              <div className="p-2 bg-slate-50/90 rounded-2xl border border-slate-200 flex items-center justify-between gap-2">
+                <span className="text-[11px] text-slate-400 pl-2">Nenhuma foto</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    id="btn-take-product-photo"
+                    type="button"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-xs cursor-pointer transition-all"
+                    title="Tirar foto"
                   >
-                    Observação
-                  </label>
-                  <input
-                    id="input-modal-notes"
-                    type="text"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder="Ex: Prateleira B, pedir pacote fechado..."
-                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-hidden focus:border-blue-500"
-                  />
+                    <Camera className="w-4 h-4" />
+                  </button>
+                  <button
+                    id="btn-upload-product-photo"
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-2 bg-slate-200/80 hover:bg-slate-300 text-slate-700 rounded-xl transition-colors cursor-pointer"
+                    title="Galeria"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Onde Salvar este Produto (quando for novo ou editando destino) */}
-          {!productToEdit && !selectedDatabaseProduct && (
-            <div className="p-2.5 bg-slate-50/80 rounded-2xl border border-slate-200/90 space-y-1.5">
-              <div className="flex items-center justify-between px-0.5">
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Database className="w-3 h-3 text-slate-400" />
-                  <span>Onde salvar este produto:</span>
-                </span>
-                <span className="text-[10px] font-semibold text-blue-600">
-                  {saveDestination === 'both' ? 'Lista + Base de Dados' : 'Apenas Base de Dados'}
-                </span>
-              </div>
 
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setSaveDestination('both')}
-                  className={`py-2 px-2.5 rounded-xl border text-center transition-all cursor-pointer text-xs font-bold flex items-center justify-center gap-1.5 ${
-                    saveDestination === 'both'
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  <ListPlus className="w-3.5 h-3.5" />
-                  <span>Lista e Base de Dados</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSaveDestination('database_only')}
-                  className={`py-2 px-2.5 rounded-xl border text-center transition-all cursor-pointer text-xs font-bold flex items-center justify-center gap-1.5 ${
-                    saveDestination === 'database_only'
-                      ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                      : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  <Database className="w-3.5 h-3.5" />
-                  <span>Só na Base de Dados</span>
-                </button>
-              </div>
+
+
+
+          {/* Dois botões de escolha de destino (quando novo produto) */}
+          {!productToEdit && !selectedDatabaseProduct && (
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSaveDestination('both')}
+                className={`py-2 px-2 rounded-xl border text-center transition-all cursor-pointer text-[11px] font-bold flex items-center justify-center gap-1.5 ${
+                  saveDestination === 'both'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <ListPlus className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Lista e Base</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSaveDestination('database_only')}
+                className={`py-2 px-2 rounded-xl border text-center transition-all cursor-pointer text-[11px] font-bold flex items-center justify-center gap-1.5 ${
+                  saveDestination === 'database_only'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <Database className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Salvar na Base</span>
+              </button>
             </div>
           )}
 

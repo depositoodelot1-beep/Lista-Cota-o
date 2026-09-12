@@ -91,6 +91,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const priorityConfig = (() => {
     const urgency = normalizeUrgency(product.urgency);
     switch (urgency) {
+      case 'fixo':
+        return {
+          label: 'FIXO',
+          color: '#4f46e5', // Indigo
+          badgeBg: 'bg-indigo-50',
+          badgeText: 'text-indigo-700',
+          badgeBorder: 'border-indigo-200',
+        };
       case 'novo':
         return {
           label: 'NOVO',
@@ -110,7 +118,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       case 'normal':
       default:
         return {
-          label: 'NORMAL',
+          label: 'COTAÇÃO',
           color: '#d97706', // Amarelo
           badgeBg: 'bg-amber-50',
           badgeText: 'text-amber-800',

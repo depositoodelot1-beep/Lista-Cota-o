@@ -87,7 +87,7 @@ export default function App() {
     isTest: boolean;
   }>(() => {
     try {
-      const saved = localStorage.getItem('supplier_auth_session');
+      const saved = sessionStorage.getItem('supplier_auth_session');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed?.active && parsed?.supplier) {
@@ -99,7 +99,7 @@ export default function App() {
         }
       }
     } catch (e) {
-      console.warn('Could not parse supplier_auth_session from localStorage:', e);
+      console.warn('Could not parse supplier_auth_session from sessionStorage:', e);
     }
     return {
       active: false,
@@ -117,14 +117,14 @@ export default function App() {
       setSupplierPortalSession(session);
       setCurrentSupplierIdentity(supplier);
       try {
-        localStorage.setItem('supplier_auth_session', JSON.stringify(session));
+        sessionStorage.setItem('supplier_auth_session', JSON.stringify(session));
       } catch (e) {
         console.warn('Failed to save supplier_auth_session:', e);
       }
     } else {
       setSupplierPortalSession({ active: false, supplier: null, isTest: false });
       try {
-        localStorage.removeItem('supplier_auth_session');
+        sessionStorage.removeItem('supplier_auth_session');
       } catch (e) {
         console.warn('Failed to remove supplier_auth_session:', e);
       }
@@ -142,7 +142,7 @@ export default function App() {
     email?: string;
   } | null>(() => {
     try {
-      const saved = localStorage.getItem('active_supplier_identity');
+      const saved = sessionStorage.getItem('active_supplier_identity');
       return saved ? JSON.parse(saved) : null;
     } catch {
       return null;
@@ -268,7 +268,7 @@ export default function App() {
         }
 
         // Check if there is already an active authenticated session for this supplier
-        const savedSession = localStorage.getItem('supplier_auth_session');
+        const savedSession = sessionStorage.getItem('supplier_auth_session');
         let isAuthenticated = false;
         if (savedSession) {
           try {
@@ -354,6 +354,7 @@ export default function App() {
 
     return {
       all: baseList.length,
+      fixo: baseList.filter((p) => normalizeUrgency(p.urgency) === 'fixo').length,
       novo: baseList.filter((p) => normalizeUrgency(p.urgency) === 'novo').length,
       normal: baseList.filter((p) => normalizeUrgency(p.urgency) === 'normal').length,
       urgente: baseList.filter((p) => normalizeUrgency(p.urgency) === 'urgente').length,
@@ -427,9 +428,9 @@ export default function App() {
   const handleChangeSupplierIdentity = (supplier: { id?: string; name: string; phone?: string; email?: string }) => {
     setCurrentSupplierIdentity(supplier);
     try {
-      localStorage.setItem('active_supplier_identity', JSON.stringify(supplier));
+      sessionStorage.setItem('active_supplier_identity', JSON.stringify(supplier));
     } catch (e) {
-      console.warn('Could not persist supplier identity in localStorage:', e);
+      console.warn('Could not persist supplier identity in sessionStorage:', e);
     }
   };
 
