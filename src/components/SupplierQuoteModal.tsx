@@ -64,7 +64,7 @@ export const SupplierQuoteModal: React.FC<SupplierQuoteModalProps> = ({
       setCustomSupplierName(existingQuote.supplierName || '');
       setSupplierPhone(existingQuote.supplierPhone || '');
       setPriceCents(existingQuote.price ? Math.round(existingQuote.price * 100) : 0);
-      setQuantityInput(String(existingQuote.quantity || product.quantity || 1));
+      setQuantityInput(String(existingQuote.quantity ?? 1));
       setUnit(existingQuote.unit || product.unit || 'un');
       setBrand(existingQuote.brand || product.brand || '');
       setNotes(existingQuote.notes || '');
@@ -89,7 +89,7 @@ export const SupplierQuoteModal: React.FC<SupplierQuoteModalProps> = ({
       }
 
       setPriceCents(0);
-      setQuantityInput(String(product.quantity || 1));
+      setQuantityInput('1');
       setUnit(product.unit || 'un');
       setBrand(product.brand || '');
       setNotes('');

@@ -1,25 +1,28 @@
 import React from 'react';
-import { Settings, Lock } from 'lucide-react';
+import { Settings, Lock, LogOut } from 'lucide-react';
 import { AppUser } from '../types';
+import { User as FirebaseUser } from 'firebase/auth';
 
 interface HeaderProps {
   toBuyCount: number;
   outOfStockCount: number;
   currentUser: AppUser;
+  firebaseUser?: FirebaseUser | null;
   supplierCount?: number;
   onOpenSheets?: () => void;
   onOpenAdmin: () => void;
   onOpenCatalog?: () => void;
   onOpenSuppliers?: () => void;
   onOpenSupplierLogin?: () => void;
+  onSignOut?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
-  toBuyCount,
-  outOfStockCount,
   currentUser,
+  firebaseUser,
   onOpenAdmin,
   onOpenSupplierLogin,
+  onSignOut,
 }) => {
   return (
     <header id="app-header" className="bg-white px-5 pt-5 pb-3 border-b border-slate-100 shadow-xs z-10">
@@ -58,6 +61,20 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Settings className="w-4 h-4" />
             </button>
+
+            {/* Sign Out button */}
+            {onSignOut && (
+              <button
+                id="btn-header-signout"
+                type="button"
+                onClick={onSignOut}
+                className="w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 flex items-center justify-center transition-colors cursor-pointer"
+                title="Sair da Conta (Google)"
+                aria-label="Sair"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -76,6 +93,12 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="text-[11px] text-slate-400 inline-flex items-center gap-1 font-medium">
               Por: <span className="text-blue-600 font-semibold">{currentUser.name}</span>
             </span>
+
+            {firebaseUser?.email && (
+              <span className="text-[11px] text-slate-400 hidden sm:inline-block">
+                ({firebaseUser.email})
+              </span>
+            )}
           </div>
         </div>
       </div>

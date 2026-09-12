@@ -38,10 +38,65 @@ import { QuotesView } from './components/QuotesView';
 import { SupplierQuoteModal } from './components/SupplierQuoteModal';
 import { SupplierPortalView } from './components/SupplierPortalView';
 import { SupplierEmailLoginModal } from './components/SupplierEmailLoginModal';
-import { ShoppingBag, Plus, RefreshCw, AlertCircle, CheckCheck, Package, CheckCircle2, ScanBarcode, Scale } from 'lucide-react';
+import { ScreenSizeIndicator } from './components/ScreenSizeIndicator';
+import { ShoppingBag, Plus, RefreshCw, AlertCircle, CheckCheck, Package, CheckCircle2, ScanBarcode, Scale, ShieldCheck } from 'lucide-react';
 import { normalizeSearchText } from './utils/text';
+import { auth } from './firebase';
+import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, User as FirebaseUser } from 'firebase/auth';
 
 export default function App() {
+  const [viewMode, setViewMode] = useState<'frame' | 'full'>(() => {
+    try {
+      return (localStorage.getItem('app_view_mode') as 'frame' | 'full') || 'frame';
+    } catch {
+      return 'frame';
+    }
+  });
+
+  const handleToggleViewMode = (mode: 'frame' | 'full') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('app_view_mode', mode);
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+      setIsAuthLoading(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    setAuthError(null);
+    setIsGoogleSigningIn(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (err: any) {
+      console.error('Google Sign-In error:', err);
+      setAuthError(err?.message || 'Falha ao autenticar com o Google. Tente novamente.');
+    } finally {
+      setIsGoogleSigningIn(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error('Sign out error:', err);
+    }
+  };
+
   const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<AppUser[]>(DEFAULT_USERS);
   const [loading, setLoading] = useState(true);
@@ -691,8 +746,18 @@ export default function App() {
   return (
     <div
       id="app-root"
-      className="min-h-screen bg-slate-300 flex items-center justify-center p-0 sm:p-4 lg:p-8 font-sans selection:bg-blue-500 selection:text-white"
+      className={
+        viewMode === 'full'
+          ? "min-h-screen bg-slate-100 flex flex-col items-center justify-start p-0 font-sans selection:bg-blue-500 selection:text-white"
+          : "min-h-screen bg-slate-300 flex items-center justify-center p-0 sm:p-4 lg:p-8 font-sans selection:bg-blue-500 selection:text-white"
+      }
     >
+      {/* Real-Time Current Screen Size Indicator & View Switcher */}
+      <ScreenSizeIndicator
+        viewMode={viewMode}
+        onToggleViewMode={handleToggleViewMode}
+      />
+
       {/* Toast notifications */}
       <ToastContainer toasts={toasts} onDismiss={removeToast} />
 
@@ -708,11 +773,15 @@ export default function App() {
       />
 
       {/* Main Container Wrapper: Device Frame + Desktop Sidebar */}
-      <div className="w-full flex items-center justify-center">
+      <div className={viewMode === 'full' ? "w-full h-screen flex justify-center" : "w-full flex items-center justify-center"}>
         {/* Device Frame matching Professional Polish */}
         <div
           id="phone-device-container"
-          className="w-full max-w-[430px] h-screen sm:h-[820px] max-h-screen sm:max-h-[92vh] bg-slate-200 sm:rounded-[40px] shadow-2xl sm:border-[10px] sm:border-slate-800 overflow-hidden flex flex-col relative shrink-0"
+          className={
+            viewMode === 'full'
+              ? "w-full max-w-5xl h-screen bg-slate-50 flex flex-col relative shadow-xl overflow-hidden"
+              : "w-full max-w-[430px] h-screen sm:h-[820px] max-h-screen sm:max-h-[92vh] bg-slate-200 sm:rounded-[40px] shadow-2xl sm:border-[10px] sm:border-slate-800 overflow-hidden flex flex-col relative shrink-0"
+          }
         >
           {supplierPortalSession.active && supplierPortalSession.supplier ? (
             <SupplierPortalView
@@ -729,6 +798,72 @@ export default function App() {
               onExitTestingMode={() => handleSetSupplierSession(null)}
               onLogout={() => handleSetSupplierSession(null)}
             />
+          ) : isAuthLoading ? (
+            <div className="flex-1 bg-slate-50 flex items-center justify-center">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-xs font-semibold text-slate-500">Carregando segurança...</p>
+              </div>
+            </div>
+          ) : !firebaseUser ? (
+            <div className="flex-1 bg-gradient-to-br from-slate-50 via-white to-blue-50 flex items-center justify-center p-6 text-center">
+              <div className="w-full max-w-sm bg-white rounded-3xl shadow-lg border border-slate-100 p-6">
+                <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xs">
+                  <ShoppingBag className="w-7 h-7" />
+                </div>
+                <h2 className="text-xl font-extrabold text-slate-900 tracking-tight mb-2">
+                  Acesso Restrito
+                </h2>
+                <p className="text-xs text-slate-500 mb-5 leading-relaxed">
+                  Faça login com sua conta Google (Gmail) para abrir o aplicativo com segurança.
+                </p>
+
+                {authError && (
+                  <div className="mb-4 p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700 text-left flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
+                    <span>{authError}</span>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleGoogleSignIn}
+                  disabled={isGoogleSigningIn}
+                  className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isGoogleSigningIn ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                        <path
+                          fill="currentColor"
+                          d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                        />
+                        <path
+                          fill="currentColor"
+                          d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        />
+                        <path
+                          fill="currentColor"
+                          d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                        />
+                        <path
+                          fill="currentColor"
+                          d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                        />
+                      </svg>
+                      <span>Entrar com o Google (Gmail)</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Firebase Auth Seguro</span>
+                </div>
+              </div>
+            </div>
           ) : (
             <>
               {/* Top Header - Rendered only on standard list screens; Quotes has its own dedicated dark bar */}
@@ -737,12 +872,14 @@ export default function App() {
                   toBuyCount={toBuyCount}
                   outOfStockCount={outOfStockCount}
                   currentUser={currentUser}
+                  firebaseUser={firebaseUser}
                   supplierCount={suppliers.length}
                   onOpenSheets={() => setIsSheetsOpen(true)}
                   onOpenAdmin={() => setIsAdminOpen(true)}
                   onOpenCatalog={() => setIsCatalogOpen(true)}
                   onOpenSuppliers={() => setIsSuppliersOpen(true)}
                   onOpenSupplierLogin={() => setIsSupplierLoginModalOpen(true)}
+                  onSignOut={handleSignOut}
                 />
               )}
 
@@ -1177,6 +1314,23 @@ export default function App() {
                 <div className="flex items-center gap-2 text-xs text-slate-600">
                   <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
                   <span>Persistência Ativa (Nuvem ON)</span>
+                </div>
+              </div>
+
+              {/* Informações de Tela (Current Screen Size) */}
+              <div className="pt-3 border-t border-slate-200">
+                <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Display & Resolução</p>
+                <p className="text-xs font-bold text-slate-800">
+                  Current screen size: {typeof window !== 'undefined' ? `${window.innerWidth} × ${window.innerHeight} px` : 'Detectando...'}
+                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleViewMode(viewMode === 'frame' ? 'full' : 'frame')}
+                    className="w-full py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold rounded-lg transition-colors cursor-pointer text-center"
+                  >
+                    {viewMode === 'frame' ? 'Ativar Tela Cheia (100%)' : 'Ativar Modo Celular (430px)'}
+                  </button>
                 </div>
               </div>
 

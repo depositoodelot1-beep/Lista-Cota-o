@@ -141,13 +141,13 @@ export const SupplierPortalView: React.FC<SupplierPortalViewProps> = ({
 
     if (existing) {
       setFormPriceCents(existing.price ? Math.round(existing.price * 100) : 0);
-      setFormQuantity(String(existing.quantity || product.quantity || 1));
+      setFormQuantity(String(existing.quantity ?? 1));
       setFormUnit(existing.unit || product.unit || 'un');
       setFormBrand(existing.brand || product.brand || '');
       setFormNotes(existing.notes || '');
     } else {
       setFormPriceCents(0);
-      setFormQuantity(String(product.quantity || 1));
+      setFormQuantity('1');
       setFormUnit(product.unit || 'un');
       setFormBrand(product.brand || '');
       setFormNotes('');
@@ -314,16 +314,6 @@ export const SupplierPortalView: React.FC<SupplierPortalViewProps> = ({
           </div>
         </div>
       </header>
-
-      {/* Security Banner Note */}
-      <div className="bg-blue-50 border-b border-blue-200/80 px-4 py-2 flex items-center justify-between gap-2 shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
-          <span className="text-[11px] font-medium text-blue-900 leading-tight">
-            Ambiente sigiloso: Seus preços são vistos exclusivamente pela loja. Nenhum concorrente tem acesso.
-          </span>
-        </div>
-      </div>
 
       {/* Search and Status Filters */}
       <div className="p-3.5 pb-2 shrink-0 max-w-2xl mx-auto w-full space-y-2">
