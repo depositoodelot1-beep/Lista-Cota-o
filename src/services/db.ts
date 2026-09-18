@@ -306,7 +306,28 @@ export function subscribeToProducts(
     const q = query(collection(db, PRODUCTS_COLLECTION), orderBy('createdAt', 'desc'));
     return onSnapshot(
       q,
-      (snapshot) => {
+      async (snapshot) => {
+        if (snapshot.empty) {
+          try {
+            const batchPromises = DEFAULT_PRODUCTS.map((prod) => {
+              return addDoc(collection(db, PRODUCTS_COLLECTION), cleanFirestorePayload({
+                ...prod,
+                createdAt: new Date().toISOString(),
+              }));
+            });
+            await Promise.all(batchPromises);
+            return;
+          } catch (seedErr) {
+            console.warn('Could not seed initial products:', seedErr);
+            const defaults: Product[] = DEFAULT_PRODUCTS.map((p, idx) => ({
+              ...p,
+              id: `prod-default-${idx + 1}`,
+            }));
+            callback(defaults);
+            return;
+          }
+        }
+
         const items: Product[] = [];
         snapshot.forEach((docSnap) => {
           const data = docSnap.data();
@@ -330,14 +351,53 @@ export function subscribeToProducts(
             updatedAt: data.updatedAt,
           });
         });
-        callback(items);
+        try {
+          localStorage.setItem('cached_products', JSON.stringify(items));
+        } catch {}
+        
+        if (items.length === 0) {
+          const defaults: Product[] = DEFAULT_PRODUCTS.map((p, idx) => ({
+            ...p,
+            id: `prod-default-${idx + 1}`,
+          }));
+          callback(defaults);
+        } else {
+          callback(items);
+        }
       },
       (err) => {
-        console.error('Firestore products subscription error:', err);
+        console.warn('Firestore products subscription error (Quota/Network):', err);
+        try {
+          const cached = localStorage.getItem('cached_products');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed.length > 0) {
+              callback(parsed);
+              return;
+            }
+          }
+        } catch {}
+        const defaults: Product[] = DEFAULT_PRODUCTS.map((p, idx) => ({
+          ...p,
+          id: `prod-default-${idx + 1}`,
+        }));
+        callback(defaults);
         if (onError) onError(err);
       }
     );
   } catch (error: any) {
+    console.warn('Firestore products exception, falling back locally:', error);
+    try {
+      const cached = localStorage.getItem('cached_products');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed.length > 0) {
+          callback(parsed);
+          return () => {};
+        }
+      }
+    } catch {}
+    callback(DEFAULT_PRODUCTS.map((p, idx) => ({ ...p, id: `prod-default-${idx + 1}` })));
     if (onError) onError(error);
     return () => {};
   }
@@ -367,6 +427,9 @@ export function subscribeToUsers(
             createdAt: data.createdAt || new Date().toISOString(),
           });
         });
+        try {
+          localStorage.setItem('cached_users', JSON.stringify(users));
+        } catch {}
         if (users.length === 0) {
           callback(DEFAULT_USERS);
         } else {
@@ -374,11 +437,28 @@ export function subscribeToUsers(
         }
       },
       (err) => {
-        console.error('Firestore users subscription error:', err);
+        console.warn('Firestore users subscription error (Quota/Network):', err);
+        try {
+          const cached = localStorage.getItem('cached_users');
+          if (cached) {
+            callback(JSON.parse(cached));
+            return;
+          }
+        } catch {}
+        callback(DEFAULT_USERS);
         if (onError) onError(err);
       }
     );
   } catch (error: any) {
+    console.warn('Firestore users exception, falling back locally:', error);
+    try {
+      const cached = localStorage.getItem('cached_users');
+      if (cached) {
+        callback(JSON.parse(cached));
+        return () => {};
+      }
+    } catch {}
+    callback(DEFAULT_USERS);
     if (onError) onError(error);
     return () => {};
   }
@@ -491,6 +571,10 @@ export function subscribeToSuppliers(
           });
         });
 
+        try {
+          localStorage.setItem('cached_suppliers', JSON.stringify(suppliers));
+        } catch {}
+
         // Fallback if empty array
         if (suppliers.length === 0) {
           callback(DEFAULT_SUPPLIERS);
@@ -499,11 +583,28 @@ export function subscribeToSuppliers(
         }
       },
       (err) => {
-        console.error('Firestore suppliers subscription error:', err);
+        console.warn('Firestore suppliers subscription error (Quota/Network):', err);
+        try {
+          const cached = localStorage.getItem('cached_suppliers');
+          if (cached) {
+            callback(JSON.parse(cached));
+            return;
+          }
+        } catch {}
+        callback(DEFAULT_SUPPLIERS);
         if (onError) onError(err);
       }
     );
   } catch (error: any) {
+    console.warn('Firestore suppliers exception, falling back locally:', error);
+    try {
+      const cached = localStorage.getItem('cached_suppliers');
+      if (cached) {
+        callback(JSON.parse(cached));
+        return () => {};
+      }
+    } catch {}
+    callback(DEFAULT_SUPPLIERS);
     if (onError) onError(error);
     return () => {};
   }
@@ -566,14 +667,34 @@ export function subscribeToQuotes(
             updatedAt: data.updatedAt,
           });
         });
+        try {
+          localStorage.setItem('cached_quotes', JSON.stringify(quotes));
+        } catch {}
         callback(quotes);
       },
       (err) => {
-        console.error('Firestore quotes subscription error:', err);
+        console.warn('Firestore quotes subscription error (Quota/Network):', err);
+        try {
+          const cached = localStorage.getItem('cached_quotes');
+          if (cached) {
+            callback(JSON.parse(cached));
+            return;
+          }
+        } catch {}
+        callback([]);
         if (onError) onError(err);
       }
     );
   } catch (error: any) {
+    console.warn('Firestore quotes exception, falling back locally:', error);
+    try {
+      const cached = localStorage.getItem('cached_quotes');
+      if (cached) {
+        callback(JSON.parse(cached));
+        return () => {};
+      }
+    } catch {}
+    callback([]);
     if (onError) onError(error);
     return () => {};
   }

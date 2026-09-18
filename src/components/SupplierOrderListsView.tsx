@@ -113,9 +113,10 @@ export const SupplierOrderListsView: React.FC<SupplierOrderListsViewProps> = ({
       // Chave única para o fornecedor
       const supplierKey = chosenQuote.supplierId || chosenQuote.supplierName.trim().toLowerCase();
 
-      // Determina a quantidade a comprar: pega do customQuantities ou padrão do produto
+      // Determina a quantidade a comprar: pega do customQuantities ou da quantidade informada na cotação pelo fornecedor (fallback para prod.quantity)
       const qtyKey = `${supplierKey}_${prod.id}`;
-      const effectiveQty = customQuantities[qtyKey] !== undefined ? customQuantities[qtyKey] : prod.quantity || 1;
+      const supplierQuotedQty = chosenQuote.quantity !== undefined && chosenQuote.quantity !== null && !isNaN(chosenQuote.quantity) ? chosenQuote.quantity : (prod.quantity || 1);
+      const effectiveQty = customQuantities[qtyKey] !== undefined ? customQuantities[qtyKey] : supplierQuotedQty;
 
       const item: SupplierOrderItem = {
         product: prod,
@@ -346,41 +347,32 @@ export const SupplierOrderListsView: React.FC<SupplierOrderListsViewProps> = ({
           </div>
         </div>
 
-        {/* 2. Seletor Horizontal de Fornecedores com Badge de Itens Vencidos */}
-        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-3">
-          {suppliersWithOrders.map((sup) => {
-            const isSelected = sup.key === selectedSupplierKey;
-            const hasItems = sup.itemCount > 0;
-
-            return (
-              <button
-                key={sup.key}
-                type="button"
-                onClick={() => setSelectedSupplierKey(sup.key)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all shrink-0 cursor-pointer border ${
-                  isSelected
-                    ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                    : hasItems
-                    ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                    : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200'
-                }`}
-              >
-                <Building2 className={`w-3.5 h-3.5 ${isSelected ? 'text-blue-400' : 'text-slate-500'}`} />
-                <span className="truncate max-w-[130px] sm:max-w-[180px]">{sup.name}</span>
-                <span
-                  className={`text-[10px] font-black px-1.5 py-0.2 rounded-full ${
-                    isSelected
-                      ? 'bg-blue-500 text-white'
-                      : hasItems
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-slate-200 text-slate-600'
-                  }`}
-                >
-                  {sup.itemCount} {sup.itemCount === 1 ? 'item' : 'itens'}
-                </span>
-              </button>
-            );
-          })}
+        {/* 2. Seletor Dropdown de Fornecedores */}
+        <div className="pt-3">
+          <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+            Selecione o Fornecedor:
+          </label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <Building2 className="w-4 h-4 text-slate-500" />
+            </div>
+            <select
+              value={selectedSupplierKey}
+              onChange={(e) => setSelectedSupplierKey(e.target.value)}
+              className="w-full pl-9 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 appearance-none cursor-pointer"
+            >
+              {suppliersWithOrders.map((sup) => (
+                <option key={sup.key} value={sup.key}>
+                  {sup.name} ({sup.itemCount} {sup.itemCount === 1 ? 'item' : 'itens'})
+                </option>
+              ))}
+            </select>
+            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+              <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+              </svg>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -390,6 +382,18 @@ export const SupplierOrderListsView: React.FC<SupplierOrderListsViewProps> = ({
           <>
             {/* Card de Resumo do Fornecedor Selecionado com Botões de Ação */}
             <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs space-y-3">
+              <div className="bg-emerald-50/90 border border-emerald-200/90 rounded-xl p-3 flex items-center justify-between shadow-2xs">
+                <div>
+                  <span className="text-[11px] font-black uppercase tracking-wider text-emerald-900 block">Valor Total do Pedido</span>
+                  <span className="text-[11px] text-emerald-700">Soma de todos os subtotais dos produtos ganhos</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-base sm:text-lg font-black text-emerald-800">
+                    R$ {estimatedTotal.toFixed(2).replace('.', ',')}
+                  </span>
+                </div>
+              </div>
+
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -539,8 +543,9 @@ export const SupplierOrderListsView: React.FC<SupplierOrderListsViewProps> = ({
                             )}
                           </div>
 
-                          <div className="text-[11px] text-slate-400 mt-1">
-                            Necessidade inicial da loja: {prod.quantity} {prod.unit}
+                          <div className="text-[11px] text-slate-500 mt-1 flex flex-col gap-0.5">
+                            <span>Qtd informada pelo fornecedor: <strong className="text-slate-800">{quote.quantity ?? prod.quantity} {quote.unit || prod.unit}</strong></span>
+                            <span className="text-slate-400 text-[10px]">Necessidade inicial da loja: {prod.quantity} {prod.unit}</span>
                           </div>
                         </div>
 
