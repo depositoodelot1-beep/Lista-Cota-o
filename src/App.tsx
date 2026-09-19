@@ -4,6 +4,7 @@ import {
   subscribeToUsers,
   subscribeToSuppliers,
   subscribeToQuotes,
+  subscribeToShoppingLists,
   initializeDefaultData,
   addProduct,
   updateProduct,
@@ -14,12 +15,16 @@ import {
   addSupplier,
   updateSupplier,
   deleteSupplier,
+  addShoppingList,
+  updateShoppingList,
+  deleteShoppingList,
   saveSupplierQuote,
   deleteSupplierQuote,
   DEFAULT_USERS,
   DEFAULT_SUPPLIERS,
+  DEFAULT_SHOPPING_LISTS,
 } from './services/db';
-import { Product, AppUser, Supplier, SupplierQuote, ProductStatus, SortField, SortDirection, ProductUrgency, normalizeUrgency } from './types';
+import { Product, AppUser, Supplier, SupplierQuote, ShoppingList, ProductStatus, SortField, SortDirection, ProductUrgency, normalizeUrgency } from './types';
 import { Header } from './components/Header';
 import { ResponsibleFilter } from './components/ResponsibleFilter';
 import { ProductCard } from './components/ProductCard';
@@ -38,8 +43,9 @@ import { QuotesView } from './components/QuotesView';
 import { SupplierQuoteModal } from './components/SupplierQuoteModal';
 import { SupplierPortalView } from './components/SupplierPortalView';
 import { SupplierEmailLoginModal } from './components/SupplierEmailLoginModal';
+import { ShoppingListsModal } from './components/ShoppingListsModal';
 import { ScreenSizeIndicator } from './components/ScreenSizeIndicator';
-import { ShoppingBag, Plus, RefreshCw, AlertCircle, CheckCheck, Package, CheckCircle2, ScanBarcode, Scale, ShieldCheck } from 'lucide-react';
+import { ShoppingBag, Plus, RefreshCw, AlertCircle, CheckCheck, Package, CheckCircle2, ScanBarcode, Scale, ShieldCheck, List } from 'lucide-react';
 import { normalizeSearchText } from './utils/text';
 import { auth } from './firebase';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut, User as FirebaseUser } from 'firebase/auth';
@@ -164,6 +170,44 @@ export default function App() {
   });
 
   const [isSupplierLoginModalOpen, setIsSupplierLoginModalOpen] = useState(false);
+  const [supplierLoggedOut, setSupplierLoggedOut] = useState(false);
+  const [shoppingLists, setShoppingLists] = useState<ShoppingList[]>(() => {
+    try {
+      const cached = localStorage.getItem('cached_shopping_lists');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return DEFAULT_SHOPPING_LISTS;
+  });
+  const [activeListId, setActiveListId] = useState<string>(() => {
+    try {
+      return localStorage.getItem('active_shopping_list_id') || 'list-default';
+    } catch {
+      return 'list-default';
+    }
+  });
+  const [isShoppingListsModalOpen, setIsShoppingListsModalOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('active_shopping_list_id', activeListId);
+    } catch {}
+  }, [activeListId]);
+
+  const activeShoppingList = useMemo(() => {
+    return shoppingLists.find((l) => l.id === activeListId) || shoppingLists[0];
+  }, [shoppingLists, activeListId]);
+
+  const effectiveSuppliers = useMemo(() => {
+    if (activeShoppingList?.supplierIds && activeShoppingList.supplierIds.length > 0) {
+      return suppliers.filter((s) => activeShoppingList.supplierIds?.includes(s.id));
+    }
+    return suppliers;
+  }, [suppliers, activeShoppingList]);
 
   // Set or clear supplier session with persistent storage and URL cleanup
   const handleSetSupplierSession = (supplier: Supplier | null, isTest: boolean = false) => {
@@ -246,6 +290,7 @@ export default function App() {
     let unsubscribeUsers: () => void = () => {};
     let unsubscribeSuppliers: () => void = () => {};
     let unsubscribeQuotes: () => void = () => {};
+    let unsubscribeShoppingLists: () => void = () => {};
 
     const startApp = async () => {
       try {
@@ -262,6 +307,13 @@ export default function App() {
 
         unsubscribeSuppliers = subscribeToSuppliers((allSuppliers) => {
           setSuppliers(allSuppliers);
+        });
+
+        unsubscribeShoppingLists = subscribeToShoppingLists((allLists) => {
+          setShoppingLists(allLists);
+          if (allLists.length > 0 && !allLists.some((l) => l.id === activeListId)) {
+            setActiveListId(allLists[0].id);
+          }
         });
 
         unsubscribeProducts = subscribeToProducts((allProds) => {
@@ -285,6 +337,7 @@ export default function App() {
       unsubscribeUsers();
       unsubscribeSuppliers();
       unsubscribeQuotes();
+      unsubscribeShoppingLists();
     };
   }, []);
 
@@ -352,6 +405,12 @@ export default function App() {
   const filteredProducts = useMemo(() => {
     let result = [...products];
 
+    // Filter by active shopping list
+    result = result.filter((p) => {
+      const pList = p.listId || 'list-default';
+      return pList === activeListId;
+    });
+
     // Exclusivamente produtos que estão na lista de compras ativa (não comprados)
     result = result.filter((p) => p.status !== 'comprado');
 
@@ -402,7 +461,8 @@ export default function App() {
 
   // Contagem de itens por prioridade na lista ativa
   const urgencyCounts = useMemo(() => {
-    const activeProducts = products.filter((p) => p.status !== 'comprado');
+    const listProducts = products.filter((p) => (p.listId || 'list-default') === activeListId);
+    const activeProducts = listProducts.filter((p) => p.status !== 'comprado');
     const baseList = selectedUserId
       ? activeProducts.filter((p) => p.responsibleId === selectedUserId)
       : activeProducts;
@@ -414,7 +474,7 @@ export default function App() {
       normal: baseList.filter((p) => normalizeUrgency(p.urgency) === 'normal').length,
       urgente: baseList.filter((p) => normalizeUrgency(p.urgency) === 'urgente').length,
     };
-  }, [products, selectedUserId]);
+  }, [products, activeListId, selectedUserId]);
 
   // Map of quotes by product ID, sorted by price ASC (lowest price first)
   const quotesByProductId = useMemo(() => {
@@ -594,12 +654,14 @@ export default function App() {
 
   // Counts
   const outOfStockCount = useMemo(() => {
-    return products.filter((p) => p.quantity === 0 || p.status === 'em_falta').length;
-  }, [products]);
+    const listProducts = products.filter((p) => (p.listId || 'list-default') === activeListId);
+    return listProducts.filter((p) => p.quantity === 0 || p.status === 'em_falta').length;
+  }, [products, activeListId]);
 
   const toBuyCount = useMemo(() => {
-    return products.filter((p) => p.status !== 'comprado').length;
-  }, [products]);
+    const listProducts = products.filter((p) => (p.listId || 'list-default') === activeListId);
+    return listProducts.filter((p) => p.status !== 'comprado').length;
+  }, [products, activeListId]);
 
   // Handlers
   const handleSaveProduct = async (productData: Omit<Product, 'id'>, editId?: string) => {
@@ -615,14 +677,20 @@ export default function App() {
       ) {
         throw new Error('Você só pode editar produtos cadastrados por você mesmo.');
       }
-      await updateProduct(editId, productData);
+      await updateProduct(editId, {
+        ...productData,
+        listId: productData.listId || activeListId,
+      });
       addToast(
         prod?.status === 'comprado'
           ? `"${productData.name}" reincluído na lista de compras!`
           : 'Produto atualizado com sucesso!'
       );
     } else {
-      await addProduct(productData);
+      await addProduct({
+        ...productData,
+        listId: activeListId,
+      });
       if (productData.status === 'comprado') {
         addToast(
           productData.barcode
@@ -796,8 +864,48 @@ export default function App() {
               onToast={addToast}
               isTestingMode={supplierPortalSession.isTest}
               onExitTestingMode={() => handleSetSupplierSession(null)}
-              onLogout={() => handleSetSupplierSession(null)}
+              onLogout={() => {
+                handleSetSupplierSession(null);
+                handleSignOut();
+                setSupplierLoggedOut(true);
+              }}
             />
+          ) : supplierLoggedOut ? (
+            <div className="flex-1 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6 text-center">
+              <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-slate-100 p-6">
+                <div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xs">
+                  <ShieldCheck className="w-7 h-7" />
+                </div>
+                <h2 className="text-xl font-extrabold text-slate-950 tracking-tight mb-2">
+                  Sessão Encerrada
+                </h2>
+                <p className="text-xs text-slate-600 mb-6 leading-relaxed">
+                  Você saiu com segurança do Portal de Cotação de Fornecedores. O acesso ao aplicativo interno não está disponível para fornecedores.
+                </p>
+                <div className="space-y-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSupplierLoggedOut(false);
+                      setIsSupplierLoginModalOpen(true);
+                    }}
+                    className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-colors shadow-md cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <span>Entrar Novamente no Portal</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSupplierLoggedOut(false);
+                      window.location.href = window.location.pathname;
+                    }}
+                    className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                  >
+                    Voltar ao Início
+                  </button>
+                </div>
+              </div>
+            </div>
           ) : isAuthLoading ? (
             <div className="flex-1 bg-slate-50 flex items-center justify-center">
               <div className="flex flex-col items-center gap-3">
@@ -868,28 +976,70 @@ export default function App() {
             <>
               {/* Top Header - Rendered only on standard list screens; Quotes has its own dedicated dark bar */}
               {activeNavTab !== 'quotes' && (
-                <Header
-                  toBuyCount={toBuyCount}
-                  outOfStockCount={outOfStockCount}
-                  currentUser={currentUser}
-                  firebaseUser={firebaseUser}
-                  supplierCount={suppliers.length}
-                  onOpenSheets={() => setIsSheetsOpen(true)}
-                  onOpenAdmin={() => setIsAdminOpen(true)}
-                  onOpenCatalog={() => setIsCatalogOpen(true)}
-                  onOpenSuppliers={() => setIsSuppliersOpen(true)}
-                  onOpenSupplierLogin={() => setIsSupplierLoginModalOpen(true)}
-                  onSignOut={handleSignOut}
-                />
+                <>
+                  <Header
+                    toBuyCount={toBuyCount}
+                    outOfStockCount={outOfStockCount}
+                    currentUser={currentUser}
+                    firebaseUser={firebaseUser}
+                    supplierCount={suppliers.length}
+                    onOpenSheets={() => setIsSheetsOpen(true)}
+                    onOpenAdmin={() => setIsAdminOpen(true)}
+                    onOpenCatalog={() => setIsCatalogOpen(true)}
+                    onOpenSuppliers={() => setIsSuppliersOpen(true)}
+                    onOpenSupplierLogin={() => setIsSupplierLoginModalOpen(true)}
+                    onSignOut={handleSignOut}
+                  />
+
+                  {/* Shopping List Selector Dropdown Bar */}
+                  <div className="px-5 py-2.5 bg-blue-50/80 border-b border-blue-100/80 flex items-center justify-between gap-2 shadow-2xs">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <div className="w-7 h-7 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold shrink-0 shadow-2xs">
+                        <List className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] font-black uppercase tracking-wider text-blue-600 leading-tight">Lista Ativa</div>
+                        <select
+                          value={activeListId}
+                          onChange={(e) => {
+                            setActiveListId(e.target.value);
+                            const sel = shoppingLists.find(l => l.id === e.target.value);
+                            if (sel) addToast('Lista alterada', `Trabalhando na lista "${sel.name}".`, 'info');
+                          }}
+                          className="w-full bg-transparent text-xs font-extrabold text-slate-900 focus:outline-none cursor-pointer truncate py-0.5"
+                        >
+                          {shoppingLists.map((list) => (
+                            <option key={list.id} value={list.id}>
+                              {list.name} {list.supplierIds && list.supplierIds.length > 0 ? `(${list.supplierIds.length} fornecedores)` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsShoppingListsModalOpen(true)}
+                      className="h-8 px-3 bg-white hover:bg-blue-600 hover:text-white text-blue-700 border border-blue-200 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 shrink-0 cursor-pointer"
+                      title="Criar ou gerenciar listas de compras e fornecedores"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Gerenciar Listas</span>
+                    </button>
+                  </div>
+                </>
               )}
 
               {activeNavTab === 'quotes' ? (
                 <QuotesView
                   products={products}
-                  suppliers={suppliers}
+                  suppliers={effectiveSuppliers}
                   quotes={quotes}
                   currentUser={currentUser}
                   currentSupplier={currentSupplierIdentity}
+                  shoppingLists={shoppingLists}
+                  activeListId={activeListId}
+                  onSelectList={setActiveListId}
+                  onOpenShoppingListsModal={() => setIsShoppingListsModalOpen(true)}
                   onChangeSupplierIdentity={handleChangeSupplierIdentity}
                   onOpenQuoteModal={handleOpenQuoteModal}
                   onDeleteQuote={handleDeleteSupplierQuote}
@@ -1373,11 +1523,31 @@ export default function App() {
       {/* Google Sheets Export & Supplier Modal */}
       <SheetsExportModal
         isOpen={isSheetsOpen}
-        products={products}
+        products={products.filter((p) => (p.listId || 'list-default') === activeListId)}
+        suppliers={effectiveSuppliers}
+        quotes={quotes}
         onClose={() => {
           setIsSheetsOpen(false);
           setActiveNavTab('list');
         }}
+        onToast={addToast}
+      />
+
+      {/* Gerenciamento de Múltiplas Listas de Compras */}
+      <ShoppingListsModal
+        isOpen={isShoppingListsModalOpen}
+        onClose={() => setIsShoppingListsModalOpen(false)}
+        shoppingLists={shoppingLists}
+        suppliers={suppliers}
+        activeListId={activeListId}
+        onSelectList={(id) => {
+          setActiveListId(id);
+          const sel = shoppingLists.find((l) => l.id === id);
+          if (sel) addToast('Lista alterada', `Trabalhando na lista "${sel.name}".`, 'info');
+        }}
+        onAddList={addShoppingList}
+        onUpdateList={updateShoppingList}
+        onDeleteList={deleteShoppingList}
         onToast={addToast}
       />
 

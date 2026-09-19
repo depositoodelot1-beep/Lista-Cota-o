@@ -12,12 +12,23 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { Product, AppUser, Supplier, SupplierQuote } from '../types';
+import { Product, AppUser, Supplier, SupplierQuote, ShoppingList } from '../types';
 
 const PRODUCTS_COLLECTION = 'products';
 const USERS_COLLECTION = 'app_users';
 const SUPPLIERS_COLLECTION = 'suppliers';
 const QUOTES_COLLECTION = 'quotes';
+const SHOPPING_LISTS_COLLECTION = 'shopping_lists';
+
+export const DEFAULT_SHOPPING_LISTS: ShoppingList[] = [
+  {
+    id: 'list-default',
+    name: 'Lista Principal de Compras',
+    description: 'Lista padrão principal de suprimentos e materiais',
+    supplierIds: [],
+    createdAt: new Date().toISOString(),
+  },
+];
 
 export const DEFAULT_SUPPLIERS: Supplier[] = [
   {
@@ -219,6 +230,13 @@ export async function initializeDefaultData(): Promise<void> {
       }
     }
 
+    const listsSnapshot = await getDocs(collection(db, SHOPPING_LISTS_COLLECTION));
+    if (listsSnapshot.empty) {
+      for (const l of DEFAULT_SHOPPING_LISTS) {
+        await setDoc(doc(db, SHOPPING_LISTS_COLLECTION, l.id), l);
+      }
+    }
+
     const quotesSnapshot = await getDocs(collection(db, QUOTES_COLLECTION));
     if (quotesSnapshot.empty) {
       const allProdsSnap = await getDocs(collection(db, PRODUCTS_COLLECTION));
@@ -347,6 +365,7 @@ export function subscribeToProducts(
             notes: data.notes || '',
             imageUrl: data.imageUrl || '',
             selectedQuoteId: data.selectedQuoteId || '',
+            listId: data.listId || 'list-default',
             createdAt: data.createdAt || new Date().toISOString(),
             updatedAt: data.updatedAt,
           });
@@ -814,6 +833,179 @@ export async function resetWinningQuote(productId: string): Promise<void> {
   } catch (e) {
     console.warn('Error resetting quotes in resetWinningQuote:', e);
   }
+}
+
+// Shopping Lists management
+export function subscribeToShoppingLists(
+  callback: (lists: ShoppingList[]) => void,
+  onError?: (error: Error) => void
+) {
+  try {
+    const q = collection(db, SHOPPING_LISTS_COLLECTION);
+    return onSnapshot(
+      q,
+      async (snapshot) => {
+        if (snapshot.empty) {
+          try {
+            const cached = localStorage.getItem('cached_shopping_lists');
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (parsed && parsed.length > 0) {
+                callback(parsed);
+                return;
+              }
+            }
+          } catch {}
+
+          try {
+            for (const list of DEFAULT_SHOPPING_LISTS) {
+              await setDoc(doc(db, SHOPPING_LISTS_COLLECTION, list.id), cleanFirestorePayload(list));
+            }
+            callback(DEFAULT_SHOPPING_LISTS);
+            return;
+          } catch (seedErr) {
+            console.warn('Could not seed default shopping lists:', seedErr);
+            callback(DEFAULT_SHOPPING_LISTS);
+            return;
+          }
+        }
+
+        const items: ShoppingList[] = [];
+        snapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          items.push({
+            id: docSnap.id,
+            name: data.name || 'Lista de Compras',
+            description: data.description || '',
+            supplierIds: data.supplierIds || [],
+            createdAt: data.createdAt || new Date().toISOString(),
+          });
+        });
+
+        // Merge cached items that might not be synced to Firestore yet
+        try {
+          const cached = localStorage.getItem('cached_shopping_lists');
+          if (cached) {
+            const cachedLists: ShoppingList[] = JSON.parse(cached);
+            for (const cachedList of cachedLists) {
+              if (!items.some((i) => i.id === cachedList.id)) {
+                items.push(cachedList);
+              }
+            }
+          }
+        } catch {}
+
+        items.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+
+        try {
+          localStorage.setItem('cached_shopping_lists', JSON.stringify(items));
+        } catch {}
+
+        if (items.length === 0) {
+          callback(DEFAULT_SHOPPING_LISTS);
+        } else {
+          callback(items);
+        }
+      },
+      (err) => {
+        console.warn('Firestore shopping lists error:', err);
+        try {
+          const cached = localStorage.getItem('cached_shopping_lists');
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            if (parsed.length > 0) {
+              callback(parsed);
+              return;
+            }
+          }
+        } catch {}
+        callback(DEFAULT_SHOPPING_LISTS);
+        if (onError) onError(err);
+      }
+    );
+  } catch (err: any) {
+    console.warn('Error setting up shopping lists subscription:', err);
+    try {
+      const cached = localStorage.getItem('cached_shopping_lists');
+      if (cached) {
+        callback(JSON.parse(cached));
+        return () => {};
+      }
+    } catch {}
+    callback(DEFAULT_SHOPPING_LISTS);
+    return () => {};
+  }
+}
+
+export async function addShoppingList(listData: Omit<ShoppingList, 'id' | 'createdAt'>): Promise<string> {
+  const id = `list-${Date.now()}`;
+  const newItem: ShoppingList = {
+    id,
+    name: listData.name,
+    description: listData.description || '',
+    supplierIds: listData.supplierIds || [],
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    const payload = cleanFirestorePayload({
+      ...listData,
+      createdAt: newItem.createdAt,
+      serverTime: serverTimestamp(),
+    });
+    await setDoc(doc(db, SHOPPING_LISTS_COLLECTION, id), payload);
+  } catch (err) {
+    console.warn('Firestore offline fallback for addShoppingList:', err);
+  }
+
+  try {
+    const cached = localStorage.getItem('cached_shopping_lists');
+    const lists: ShoppingList[] = cached ? JSON.parse(cached) : [];
+    lists.push(newItem);
+    localStorage.setItem('cached_shopping_lists', JSON.stringify(lists));
+  } catch {}
+
+  return id;
+}
+
+export async function updateShoppingList(id: string, listData: Partial<ShoppingList>): Promise<void> {
+  try {
+    const cached = localStorage.getItem('cached_shopping_lists');
+    if (cached) {
+      let lists: ShoppingList[] = JSON.parse(cached);
+      lists = lists.map((l) => (l.id === id ? { ...l, ...listData } : l));
+      localStorage.setItem('cached_shopping_lists', JSON.stringify(lists));
+    }
+  } catch {}
+
+  try {
+    const ref = doc(db, SHOPPING_LISTS_COLLECTION, id);
+    const payload = cleanFirestorePayload({
+      ...listData,
+      updatedAt: new Date().toISOString(),
+    });
+    await updateDoc(ref, payload);
+  } catch (err) {
+    console.warn('Firestore offline fallback for updateShoppingList:', err);
+  }
+}
+
+export async function deleteShoppingList(id: string): Promise<void> {
+  try {
+    const ref = doc(db, SHOPPING_LISTS_COLLECTION, id);
+    await deleteDoc(ref);
+  } catch (err) {
+    console.warn('Firestore offline fallback for deleteShoppingList:', err);
+  }
+
+  try {
+    const cached = localStorage.getItem('cached_shopping_lists');
+    if (cached) {
+      let lists: ShoppingList[] = JSON.parse(cached);
+      lists = lists.filter((l) => l.id !== id);
+      localStorage.setItem('cached_shopping_lists', JSON.stringify(lists));
+    }
+  } catch {}
 }
 
 

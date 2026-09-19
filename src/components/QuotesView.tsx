@@ -29,8 +29,9 @@ import {
   BookmarkCheck,
   RotateCcw,
   Mail,
+  List,
 } from 'lucide-react';
-import { Product, Supplier, SupplierQuote, AppUser } from '../types';
+import { ShoppingList, Product, Supplier, SupplierQuote, AppUser } from '../types';
 import { normalizeSearchText } from '../utils/text';
 import { chooseWinningQuote, resetWinningQuote } from '../services/db';
 import { SupplierOrderListsView } from './SupplierOrderListsView';
@@ -46,6 +47,10 @@ interface QuotesViewProps {
     phone?: string;
     email?: string;
   } | null;
+  shoppingLists: ShoppingList[];
+  activeListId: string;
+  onSelectList: (listId: string) => void;
+  onOpenShoppingListsModal: () => void;
   onChangeSupplierIdentity: (supplier: { id?: string; name: string; phone?: string; email?: string }) => void;
   onOpenQuoteModal: (product: Product, existingQuote: SupplierQuote | null) => void;
   onDeleteQuote: (id: string) => Promise<void>;
@@ -63,6 +68,10 @@ export const QuotesView: React.FC<QuotesViewProps> = ({
   quotes,
   currentUser: _currentUser,
   currentSupplier,
+  shoppingLists,
+  activeListId,
+  onSelectList,
+  onOpenShoppingListsModal,
   onChangeSupplierIdentity,
   onOpenQuoteModal,
   onDeleteQuote: _onDeleteQuote,
@@ -89,10 +98,15 @@ export const QuotesView: React.FC<QuotesViewProps> = ({
   const [selectedDisputeProductId, setSelectedDisputeProductId] = useState<string>('all');
   const [isUpdatingWinner, setIsUpdatingWinner] = useState<string | null>(null);
 
+  // Products belonging to the active shopping list
+  const listProducts = useMemo(() => {
+    return products.filter((p) => (p.listId || 'list-default') === activeListId);
+  }, [products, activeListId]);
+
   // Active products in shopping list (status !== 'comprado')
   const shoppingListProducts = useMemo(() => {
-    return products.filter((p) => p.status !== 'comprado');
-  }, [products]);
+    return listProducts.filter((p) => p.status !== 'comprado');
+  }, [listProducts]);
 
   // Group quotes by product ID, sorted by price ASC (lowest price first)
   const quotesByProductId = useMemo(() => {
@@ -437,6 +451,48 @@ export const QuotesView: React.FC<QuotesViewProps> = ({
         {/* ===================================================================== */}
         {activeSubTab === 'cotar' && (
           <div className="p-3.5 sm:p-4 space-y-3.5 max-w-2xl mx-auto w-full">
+            {/* 0. Lista de Compras Ativa / Seletor */}
+            <div className="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-2xs space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-slate-800 font-black text-xs tracking-wider uppercase">
+                  <List className="w-4 h-4 text-blue-600" />
+                  <span>LISTA DE COMPRAS ATIVA:</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={onOpenShoppingListsModal}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-100 cursor-pointer"
+                >
+                  Gerenciar Listas
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <select
+                    id="select-active-shopping-list"
+                    value={activeListId}
+                    onChange={(e) => {
+                      const listId = e.target.value;
+                      onSelectList(listId);
+                      const selList = shoppingLists.find((l) => l.id === listId);
+                      if (selList) {
+                        onToast('Lista selecionada', `Cotando para a lista "${selList.name}".`);
+                      }
+                    }}
+                    className="w-full appearance-none bg-slate-50 hover:bg-slate-100/80 text-slate-800 font-extrabold text-sm px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-colors cursor-pointer pr-9"
+                  >
+                    {shoppingLists.map((l) => (
+                      <option key={l.id} value={l.id}>
+                        {l.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-4 h-4 text-slate-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                </div>
+              </div>
+            </div>
+
             {/* 1. VOCÊ ESTÁ COTANDO COMO: Dropdown Selector Header */}
             <div className="bg-white rounded-2xl p-3.5 border border-slate-200/80 shadow-2xs space-y-2">
               <div className="flex items-center justify-between">
@@ -1138,7 +1194,7 @@ export const QuotesView: React.FC<QuotesViewProps> = ({
         {/* ===================================================================== */}
         {activeSubTab === 'listas' && (
           <SupplierOrderListsView
-            products={products}
+            products={listProducts}
             suppliers={suppliers}
             quotes={quotes}
             onChooseWinningQuote={handleChooseSupplier}

@@ -23,6 +23,14 @@ export function normalizeUrgency(urgency?: string): ProductUrgency {
   return 'normal';
 }
 
+export interface ShoppingList {
+  id: string;
+  name: string;
+  description?: string;
+  supplierIds?: string[]; // IDs dos fornecedores associados a esta lista
+  createdAt: string;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -39,6 +47,7 @@ export interface Product {
   notes?: string;
   imageUrl?: string;
   selectedQuoteId?: string; // ID da cotação escolhida manualmente pelo usuário
+  listId?: string; // ID da lista de compras a qual o produto pertence
   createdAt: string; // ISO string
   updatedAt?: string;
 }
